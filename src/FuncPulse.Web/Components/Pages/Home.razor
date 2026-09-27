@@ -224,15 +224,27 @@
         subscriptionId = AzureSettings.Value.SubscriptionId;
         resourceGroup = AzureSettings.Value.ResourceGroup;
         
-        if (AzureSettings.Value.DemoMode || 
-            (!string.IsNullOrEmpty(subscriptionId) && !string.IsNullOrEmpty(resourceGroup)))
-        {
-            await LoadDataAsync();
-        }
-        else
+        // Don't load data here - it blocks the first render
+        // Data loading moved to OnAfterRenderAsync
+        
+        if (!AzureSettings.Value.DemoMode && 
+            (string.IsNullOrEmpty(subscriptionId) || string.IsNullOrEmpty(resourceGroup)))
         {
             isLoading = false;
             errorMessage = "Azure subscription and resource group not configured. Update appsettings.json or environment variables.";
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Now the loading overlay is visible before we start the Azure call
+            if (AzureSettings.Value.DemoMode || 
+                (!string.IsNullOrEmpty(subscriptionId) && !string.IsNullOrEmpty(resourceGroup)))
+            {
+                await LoadDataAsync();
+            }
         }
     }
 
