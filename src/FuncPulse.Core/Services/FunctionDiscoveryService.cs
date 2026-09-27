@@ -194,6 +194,42 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
         }
     }
 
+    public async Task<List<string>> ListResourceGroupsAsync(string subscriptionId, CancellationToken cancellationToken = default)
+    {
+        if (_settings.DemoMode)
+        {
+            return new List<string> { "demo-rg-east", "demo-rg-west", "demo-rg-central" };
+        }
+
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Listing resource groups in subscription {subscriptionId[..Math.Min(8, subscriptionId.Length)]}...");
+
+        try
+        {
+            var resourceGroups = new List<string>();
+            
+            var subscription = _armClient.GetSubscriptionResource(
+                new ResourceIdentifier($"/subscriptions/{subscriptionId}"));
+            
+            await foreach (var rg in subscription.GetResourceGroups().GetAllAsync(cancellationToken: cancellationToken))
+            {
+                resourceGroups.Add(rg.Data.Name);
+            }
+            
+            timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Found {resourceGroups.Count} resource group(s)");
+            
+            return resourceGroups.OrderBy(name => name).ToList();
+        }
+        catch (Exception ex)
+        {
+            timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: ERROR listing resource groups - {ex.GetType().Name}: {ex.Message}");
+            _logger.LogError(ex, "Failed to list resource groups in subscription {SubscriptionId}", subscriptionId);
+            throw;
+        }
+    }
+
     private List<FunctionAppInfo> GenerateDemoFunctionApps()
     {
         var random = new Random(42);

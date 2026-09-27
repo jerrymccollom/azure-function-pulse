@@ -65,9 +65,55 @@
                 <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
                     <span class="visually-hidden">Loading...</span>
                 </div>
-                <h4 class="mt-3">Loading Function Apps...</h4>
-                <p class="text-muted">Connecting to Azure and discovering functions</p>
+                <h4 class="mt-3">@loadingMessage</h4>
+                <p class="text-muted">@loadingSubMessage</p>
                 <p class="text-muted small">This may take several minutes if authenticating for the first time or on slow networks</p>
+            </div>
+        </div>
+    }
+    else if (showResourceGroupPicker)
+    {
+        <div class="row">
+            <div class="col-lg-8 offset-lg-2">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Select Resource Group</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (availableResourceGroups.Count == 0)
+                        {
+                            <div class="alert alert-warning">
+                                No resource groups found in subscription <strong>@subscriptionId</strong>.
+                                Please ensure you have the correct permissions.
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">
+                                Found @availableResourceGroups.Count resource group(s) in subscription <strong>@subscriptionId</strong>.
+                                Select a resource group to view its Azure Functions:
+                            </p>
+                            <div class="list-group">
+                                @foreach (var rg in availableResourceGroups)
+                                {
+                                    <button type="button" 
+                                            class="list-group-item list-group-item-action @(rg == selectedResourceGroupOption ? "active" : "")"
+                                            @onclick="() => selectedResourceGroupOption = rg">
+                                        @rg
+                                    </button>
+                                }
+                            </div>
+                            @if (!string.IsNullOrEmpty(selectedResourceGroupOption))
+                            {
+                                <div class="mt-3">
+                                    <button class="btn btn-primary" @onclick="ApplyResourceGroupSelection">
+                                        Load Functions from @selectedResourceGroupOption
+                                    </button>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
             </div>
         </div>
     }
@@ -209,6 +255,12 @@
     private List<FunctionAppInfo> functionApps = new();
     private bool isLoading = true;
     private string? errorMessage;
+    private string loadingMessage = "Loading Function Apps...";
+    private string loadingSubMessage = "Connecting to Azure and discovering functions";
+    
+    private bool showResourceGroupPicker = false;
+    private List<string> availableResourceGroups = new();
+    private string? selectedResourceGroupOption;
     
     private int totalFunctions => functionApps.Sum(a => a.Functions.Count);
     private int healthyCount => functionApps.SelectMany(a => a.Functions)
@@ -227,11 +279,18 @@
         // Don't load data here - it blocks the first render
         // Data loading moved to OnAfterRenderAsync
         
-        if (!AzureSettings.Value.DemoMode && 
-            (string.IsNullOrEmpty(subscriptionId) || string.IsNullOrEmpty(resourceGroup)))
+        if (!AzureSettings.Value.DemoMode)
         {
-            isLoading = false;
-            errorMessage = "Azure subscription and resource group not configured. Update appsettings.json or environment variables.";
+            if (string.IsNullOrEmpty(subscriptionId))
+            {
+                isLoading = false;
+                errorMessage = "Azure subscription not configured. Update appsettings.json or environment variables.";
+            }
+            else if (string.IsNullOrEmpty(resourceGroup))
+            {
+                // Show resource group picker instead of error
+                showResourceGroupPicker = true;
+            }
         }
     }
 
@@ -239,8 +298,13 @@
     {
         if (firstRender)
         {
-            // Now the loading overlay is visible before we start the Azure call
-            if (AzureSettings.Value.DemoMode || 
+            // Load resource groups if picker should be shown
+            if (showResourceGroupPicker)
+            {
+                await LoadResourceGroupsAsync();
+            }
+            // Load function apps if config is complete
+            else if (AzureSettings.Value.DemoMode || 
                 (!string.IsNullOrEmpty(subscriptionId) && !string.IsNullOrEmpty(resourceGroup)))
             {
                 await LoadDataAsync();
@@ -306,6 +370,44 @@
             isLoading = false;
             StateHasChanged();
         }
+    }
+
+    private async Task LoadResourceGroupsAsync()
+    {
+        isLoading = true;
+        loadingMessage = "Loading Resource Groups...";
+        loadingSubMessage = "Connecting to Azure and discovering resource groups";
+        errorMessage = null;
+        StateHasChanged();
+
+        var timeoutSeconds = AzureSettings.Value.OperationTimeoutSeconds;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+
+        try
+        {
+            availableResourceGroups = await DiscoveryService.ListResourceGroupsAsync(subscriptionId, cts.Token);
+            showResourceGroupPicker = true;
+        }
+        catch (Exception ex)
+        {
+            showResourceGroupPicker = false;
+            errorMessage = $"Failed to load resource groups: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ApplyResourceGroupSelection()
+    {
+        if (string.IsNullOrEmpty(selectedResourceGroupOption))
+            return;
+
+        resourceGroup = selectedResourceGroupOption;
+        showResourceGroupPicker = false;
+        await LoadDataAsync();
     }
 
     private void ViewFunctionDetails(FunctionAppInfo app, FunctionInfo function)
