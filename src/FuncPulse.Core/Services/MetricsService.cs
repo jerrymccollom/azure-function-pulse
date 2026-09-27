@@ -59,7 +59,10 @@ public class MetricsService : IMetricsService
         {
             var endTime = DateTimeOffset.UtcNow;
             var startTime = endTime - timeRange.ToTimeSpan();
-            var interval = TimeSpan.Parse(timeRange.ToMetricInterval());
+            
+            // Parse ISO-8601 duration (e.g., "PT1H", "P1D") using XmlConvert
+            var intervalString = timeRange.ToMetricInterval();
+            var interval = System.Xml.XmlConvert.ToTimeSpan(intervalString);
 
             var metrics = new FunctionMetrics();
             
