@@ -29,8 +29,20 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
         }
         else
         {
-            var credential = new DefaultAzureCredential();
-            _armClient = new ArmClient(credential);
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Initializing DefaultAzureCredential...");
+            
+            try
+            {
+                var credential = new DefaultAzureCredential();
+                _armClient = new ArmClient(credential);
+                Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: DefaultAzureCredential created successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: ERROR creating credential - {ex.Message}");
+                throw;
+            }
         }
     }
 
@@ -44,19 +56,35 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
             return GenerateDemoFunctionApps();
         }
 
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Starting discovery in subscription {subscriptionId[..Math.Min(8, subscriptionId.Length)]}... / RG '{resourceGroup}'");
+
         try
         {
             var functionApps = new List<FunctionAppInfo>();
+            
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Resolving subscription resource...");
             var subscription = _armClient.GetSubscriptionResource(
                 new ResourceIdentifier($"/subscriptions/{subscriptionId}"));
             
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Fetching resource group '{resourceGroup}'...");
             var resourceGroupResource = await subscription.GetResourceGroupAsync(resourceGroup, cancellationToken);
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Resource group found, listing web apps...");
+            
             var webApps = resourceGroupResource.Value.GetWebSites();
 
+            var webAppCount = 0;
+            var functionAppCount = 0;
+            
             await foreach (var webApp in webApps.GetAllAsync(cancellationToken: cancellationToken))
             {
+                webAppCount++;
                 if (webApp.Data.Kind?.Contains("functionapp") == true)
                 {
+                    functionAppCount++;
+                    timestamp = DateTime.Now.ToString("HH:mm:ss");
+                    Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Found Function App '{webApp.Data.Name}'");
+                    
                     var appInfo = new FunctionAppInfo
                     {
                         ResourceId = webApp.Id.ToString(),
@@ -70,13 +98,21 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
                         var connectionStringSetting = appSettings
                             .FirstOrDefault(s => s.Name == "APPLICATIONINSIGHTS_CONNECTION_STRING");
                         appInfo.AppInsightsConnectionString = connectionStringSetting?.Value;
+                        if (!string.IsNullOrEmpty(appInfo.AppInsightsConnectionString))
+                        {
+                            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService:   - App Insights connected");
+                        }
                     }
 
                     try
                     {
+                        Console.WriteLine($"[{timestamp}] FunctionDiscoveryService:   - Listing functions...");
                         var functionsCollection = webApp.GetSiteFunctions();
+                        var functionCount = 0;
+                        
                         await foreach (var function in functionsCollection.GetAllAsync(cancellationToken: cancellationToken))
                         {
+                            functionCount++;
                             var triggerType = "Unknown";
                             if (function.Data.Config != null)
                             {
@@ -107,9 +143,14 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
                                 TriggerType = triggerType
                             });
                         }
+                        
+                        timestamp = DateTime.Now.ToString("HH:mm:ss");
+                        Console.WriteLine($"[{timestamp}] FunctionDiscoveryService:   - Found {functionCount} function(s)");
                     }
                     catch (Exception ex)
                     {
+                        timestamp = DateTime.Now.ToString("HH:mm:ss");
+                        Console.WriteLine($"[{timestamp}] FunctionDiscoveryService:   - ERROR listing functions: {ex.Message}");
                         _logger.LogWarning(ex, "Failed to list functions for {AppName}", appInfo.Name);
                     }
 
@@ -117,10 +158,19 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
                 }
             }
 
+            timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Discovery complete - {webAppCount} web app(s), {functionAppCount} function app(s)");
+            
             return functionApps;
         }
         catch (Exception ex)
         {
+            timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: ERROR - {ex.GetType().Name}: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"[{timestamp}] FunctionDiscoveryService:   Inner: {ex.InnerException.Message}");
+            }
             _logger.LogError(ex, "Failed to discover function apps in {ResourceGroup}", resourceGroup);
             throw;
         }

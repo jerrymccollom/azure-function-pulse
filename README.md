@@ -231,6 +231,60 @@ Thresholds can be customized in `appsettings.json` under `HealthThresholds`.
 
 ## Troubleshooting
 
+### Verbose Console Logging
+
+When running with `DemoMode: false`, FuncPulse automatically outputs verbose console logs showing each step of the Azure connection process. This helps diagnose connection stalls or authentication issues.
+
+**Example console output:**
+```
+[15:30:00] FuncPulse starting...
+[15:30:00] Configuration loaded:
+  - DemoMode: False
+  - SubscriptionId: 12345678...
+  - ResourceGroup: my-functions-rg
+  - TenantId: abcdef12...
+[15:30:00] Azure production mode enabled - verbose logging active
+[15:30:00] Will use DefaultAzureCredential (tries: Environment → Managed Identity → Azure CLI → PowerShell → Visual Studio)
+[15:30:00] Building application...
+[15:30:01] FunctionDiscoveryService: Initializing DefaultAzureCredential...
+[15:30:01] FunctionDiscoveryService: DefaultAzureCredential created successfully
+[15:30:01] MetricsService: Initializing DefaultAzureCredential for Azure Monitor...
+[15:30:01] MetricsService: MetricsQueryClient created successfully
+[15:30:01] LogsService: Initializing DefaultAzureCredential for Log Analytics...
+[15:30:01] LogsService: LogsQueryClient created successfully
+[15:30:01] Configuring HTTP pipeline...
+[15:30:01] Starting Kestrel HTTP listener...
+[15:30:01] Application URLs will be displayed below:
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: https://localhost:5001
+```
+
+When a user loads the dashboard, you'll see additional logs:
+```
+[15:30:15] FunctionDiscoveryService: Starting discovery in subscription 12345678... / RG 'my-functions-rg'
+[15:30:15] FunctionDiscoveryService: Resolving subscription resource...
+[15:30:15] FunctionDiscoveryService: Fetching resource group 'my-functions-rg'...
+[15:30:16] FunctionDiscoveryService: Resource group found, listing web apps...
+[15:30:17] FunctionDiscoveryService: Found Function App 'order-processor'
+[15:30:17] FunctionDiscoveryService:   - App Insights connected
+[15:30:17] FunctionDiscoveryService:   - Listing functions...
+[15:30:18] FunctionDiscoveryService:   - Found 3 function(s)
+[15:30:18] FunctionDiscoveryService: Discovery complete - 2 web app(s), 2 function app(s)
+```
+
+**If authentication stalls**, you'll see where it stops:
+```
+[15:30:01] FunctionDiscoveryService: Initializing DefaultAzureCredential...
+<hangs here - credential chain is trying each method>
+```
+
+**If discovery fails**, you'll see the error:
+```
+[15:30:16] FunctionDiscoveryService: ERROR - AuthenticationFailedException: No valid credentials found
+```
+
+### Common Issues
+
 ### "Azure subscription and resource group not configured"
 
 **Cause**: `Azure:SubscriptionId` or `Azure:ResourceGroup` is not set, and `DemoMode` is `false`.

@@ -24,8 +24,20 @@ public class LogsService : ILogsService
         
         if (!_settings.DemoMode)
         {
-            var credential = new DefaultAzureCredential();
-            _logsClient = new LogsQueryClient(credential);
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] LogsService: Initializing DefaultAzureCredential for Log Analytics...");
+            
+            try
+            {
+                var credential = new DefaultAzureCredential();
+                _logsClient = new LogsQueryClient(credential);
+                Console.WriteLine($"[{timestamp}] LogsService: LogsQueryClient created successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[{timestamp}] LogsService: ERROR creating client - {ex.Message}");
+                throw;
+            }
         }
     }
 
@@ -44,6 +56,9 @@ public class LogsService : ILogsService
             return null;
         }
 
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        Console.WriteLine($"[{timestamp}] LogsService: Querying Application Insights logs for operation {operationId[..Math.Min(8, operationId.Length)]}...");
+
         try
         {
             var query = $@"
@@ -52,6 +67,7 @@ public class LogsService : ILogsService
                 | project timestamp, itemType, message, severityLevel, outerMessage, type, problemId, details
                 | order by timestamp asc";
 
+            Console.WriteLine($"[{timestamp}] LogsService: Executing KQL query against workspace...");
             var response = await _logsClient.QueryWorkspaceAsync(
                 appInsightsResourceId,
                 query,
@@ -60,6 +76,8 @@ public class LogsService : ILogsService
 
             if (response?.Value == null)
             {
+                timestamp = DateTime.Now.ToString("HH:mm:ss");
+                Console.WriteLine($"[{timestamp}] LogsService: No logs found");
                 return null;
             }
 
@@ -72,7 +90,7 @@ public class LogsService : ILogsService
             var table = response.Value.Table;
             foreach (var row in table.Rows)
             {
-                var timestamp = row.GetDateTimeOffset("timestamp")?.UtcDateTime ?? DateTime.UtcNow;
+                var ts = row.GetDateTimeOffset("timestamp")?.UtcDateTime ?? DateTime.UtcNow;
                 var itemType = row.GetString("itemType") ?? "trace";
                 var message = row.GetString("message") ?? row.GetString("outerMessage") ?? string.Empty;
                 var severityLevel = row.GetInt32("severityLevel");
@@ -81,7 +99,7 @@ public class LogsService : ILogsService
 
                 log.Entries.Add(new LogEntry
                 {
-                    Timestamp = timestamp,
+                    Timestamp = ts,
                     Level = severityLevel switch
                     {
                         0 => "Verbose",
@@ -97,10 +115,15 @@ public class LogsService : ILogsService
                 });
             }
 
+            timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] LogsService: Retrieved {log.Entries.Count} log entries");
+            
             return log;
         }
         catch (Exception ex)
         {
+            timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] LogsService: ERROR - {ex.GetType().Name}: {ex.Message}");
             _logger.LogError(ex, "Failed to query logs for operation {OperationId}", operationId);
             return null;
         }

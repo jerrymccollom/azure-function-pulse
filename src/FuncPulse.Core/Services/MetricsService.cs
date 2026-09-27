@@ -24,8 +24,20 @@ public class MetricsService : IMetricsService
         
         if (!_settings.DemoMode)
         {
-            var credential = new DefaultAzureCredential();
-            _metricsClient = new MetricsQueryClient(credential);
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] MetricsService: Initializing DefaultAzureCredential for Azure Monitor...");
+            
+            try
+            {
+                var credential = new DefaultAzureCredential();
+                _metricsClient = new MetricsQueryClient(credential);
+                Console.WriteLine($"[{timestamp}] MetricsService: MetricsQueryClient created successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[{timestamp}] MetricsService: ERROR creating client - {ex.Message}");
+                throw;
+            }
         }
     }
 
@@ -40,6 +52,9 @@ public class MetricsService : IMetricsService
             return GenerateDemoMetrics(functionName, timeRange);
         }
 
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        Console.WriteLine($"[{timestamp}] MetricsService: Querying metrics for function '{functionName}' over {timeRange.ToDisplayString()}...");
+
         try
         {
             var endTime = DateTimeOffset.UtcNow;
@@ -50,6 +65,7 @@ public class MetricsService : IMetricsService
             
             if (_metricsClient == null)
             {
+                Console.WriteLine($"[{timestamp}] MetricsService: ERROR - MetricsQueryClient is null");
                 return metrics;
             }
 
@@ -62,6 +78,7 @@ public class MetricsService : IMetricsService
 
             try
             {
+                Console.WriteLine($"[{timestamp}] MetricsService: Calling Azure Monitor Metrics API...");
                 var response = await _metricsClient.QueryResourceAsync(
                     resourceId,
                     new[] { "FunctionExecutionCount" },
@@ -91,9 +108,14 @@ public class MetricsService : IMetricsService
                         }
                     }
                 }
+                
+                timestamp = DateTime.Now.ToString("HH:mm:ss");
+                Console.WriteLine($"[{timestamp}] MetricsService: Metrics retrieved - {metrics.TotalCount} invocations");
             }
             catch (Exception ex)
             {
+                timestamp = DateTime.Now.ToString("HH:mm:ss");
+                Console.WriteLine($"[{timestamp}] MetricsService: ERROR querying metrics - {ex.Message}");
                 _logger.LogWarning(ex, "Failed to query metrics for {FunctionName}", functionName);
             }
 
@@ -101,6 +123,8 @@ public class MetricsService : IMetricsService
         }
         catch (Exception ex)
         {
+            timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] MetricsService: ERROR - {ex.GetType().Name}: {ex.Message}");
             _logger.LogError(ex, "Error getting metrics for function {FunctionName}", functionName);
             throw;
         }
