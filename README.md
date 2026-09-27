@@ -292,6 +292,14 @@ After timeout, you'll see a helpful error message in the UI explaining common ca
 
 ### Common Issues
 
+### "Blank screen on first load" / Application Hangs
+
+**Cause**: This was caused by a Blazor Server lifecycle issue where `OnInitializedAsync()` was blocking the first render while authenticating to Azure.
+
+**Fixed**: Data loading now happens in `OnAfterRenderAsync(firstRender)` so the loading overlay renders immediately, then Azure authentication begins. Combined with the 60-second timeout, users now see clear feedback instead of a blank screen.
+
+If you still experience delays, it's the authentication process (see verbose logging output). Use `az login --use-device-code` for faster, more reliable authentication.
+
 ### "Azure subscription and resource group not configured"
 
 **Cause**: `Azure:SubscriptionId` or `Azure:ResourceGroup` is not set, and `DemoMode` is `false`.
