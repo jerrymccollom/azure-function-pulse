@@ -68,15 +68,19 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
                 new ResourceIdentifier($"/subscriptions/{subscriptionId}"));
             
             Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Fetching resource group '{resourceGroup}'...");
-            var resourceGroupResource = await subscription.GetResourceGroupAsync(resourceGroup, cancellationToken);
-            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Resource group found, listing web apps...");
             
-            var webApps = resourceGroupResource.Value.GetWebSites();
+            try
+            {
+                var resourceGroupResource = await subscription.GetResourceGroupAsync(resourceGroup, cancellationToken);
+                timestamp = DateTime.Now.ToString("HH:mm:ss");
+                Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Resource group found, listing web apps...");
+                
+                var webApps = resourceGroupResource.Value.GetWebSites();
 
-            var webAppCount = 0;
-            var functionAppCount = 0;
-            
-            await foreach (var webApp in webApps.GetAllAsync(cancellationToken: cancellationToken))
+                var webAppCount = 0;
+                var functionAppCount = 0;
+                
+                await foreach (var webApp in webApps.GetAllAsync(cancellationToken: cancellationToken))
             {
                 webAppCount++;
                 if (webApp.Data.Kind?.Contains("functionapp") == true)
@@ -162,6 +166,19 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
             Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Discovery complete - {webAppCount} web app(s), {functionAppCount} function app(s)");
             
             return functionApps;
+            }
+            catch (OperationCanceledException)
+            {
+                timestamp = DateTime.Now.ToString("HH:mm:ss");
+                Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Operation cancelled (timeout)");
+                throw;
+            }
+            catch (Azure.RequestFailedException ex) when (ex.Status == 404)
+            {
+                timestamp = DateTime.Now.ToString("HH:mm:ss");
+                Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Resource group '{resourceGroup}' not found or no access");
+                throw;
+            }
         }
         catch (Exception ex)
         {

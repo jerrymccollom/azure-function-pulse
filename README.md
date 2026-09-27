@@ -235,6 +235,8 @@ Thresholds can be customized in `appsettings.json` under `HealthThresholds`.
 
 When running with `DemoMode: false`, FuncPulse automatically outputs verbose console logs showing each step of the Azure connection process. This helps diagnose connection stalls or authentication issues.
 
+**Timeouts:** All Azure operations have a 60-second timeout. If authentication or API calls take longer, you'll see a clear timeout error with troubleshooting guidance.
+
 **Example console output:**
 ```
 [15:30:00] FuncPulse starting...
@@ -275,13 +277,18 @@ When a user loads the dashboard, you'll see additional logs:
 **If authentication stalls**, you'll see where it stops:
 ```
 [15:30:01] FunctionDiscoveryService: Initializing DefaultAzureCredential...
-<hangs here - credential chain is trying each method>
+[15:30:15] FunctionDiscoveryService: Starting discovery...
+[15:30:15] FunctionDiscoveryService: Fetching resource group 'my-functions-rg'...
+<hangs here - credential chain is trying each method, will timeout after 60 seconds>
+[15:31:15] FunctionDiscoveryService: TIMEOUT after 60 seconds
 ```
 
-**If discovery fails**, you'll see the error:
-```
-[15:30:16] FunctionDiscoveryService: ERROR - AuthenticationFailedException: No valid credentials found
-```
+After timeout, you'll see a helpful error message in the UI explaining common causes:
+- Azure CLI authentication is slow or stale
+- Network connectivity issues
+- Insufficient permissions
+
+**Solution:** Try `az login --use-device-code` for more reliable authentication.
 
 ### Common Issues
 
