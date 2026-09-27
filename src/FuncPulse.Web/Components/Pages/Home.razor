@@ -367,7 +367,7 @@
             availableResourceGroups = snapshot.AvailableResourceGroups.ToList();
             functionApps = snapshot.FunctionApps.ToList();
             restoredFromState = true;
-            showRefreshPrompt = snapshot.ShouldPromptForRefresh;
+            showRefreshPrompt = false;
             isLoading = false;
         }
         
@@ -398,6 +398,12 @@
                 if (restoredFromState)
                 {
                     await LoadResourceGroupsAsync(showLoadingState: false);
+                    await CheckManagementPermissionsAsync();
+                    if (canManageApps)
+                    {
+                        await LoadAppStatesAsync();
+                    }
+                    StateHasChanged();
                     return;
                 }
 
