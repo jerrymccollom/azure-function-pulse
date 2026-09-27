@@ -1,9 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/FuncPulse.Core/FuncPulse.Core.csproj" />
-    <Project Path="src/FuncPulse.Web/FuncPulse.Web.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/FuncPulse.Tests/FuncPulse.Tests.csproj" />
-  </Folder>
-</Solution>
