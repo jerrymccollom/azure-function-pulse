@@ -58,6 +58,7 @@ FuncPulse is configured via `appsettings.json` or environment variables:
 | `Azure:ResourceGroup` | Resource group name to monitor | Yes (unless DemoMode) | - |
 | `Azure:TenantId` | Azure AD tenant ID | No | - |
 | `Azure:DemoMode` | Enable demo mode with sample data (no Azure auth required) | No | `true` |
+| `Azure:OperationTimeoutSeconds` | Timeout in seconds for Azure operations (discovery, metrics, logs) | No | `300` (5 minutes) |
 | `HealthThresholds:WarningThreshold` | Failure rate % threshold for warning status (amber) | No | `1.0` |
 | `HealthThresholds:CriticalThreshold` | Failure rate % threshold for critical status (red) | No | `5.0` |
 
@@ -70,6 +71,7 @@ export Azure__SubscriptionId="your-subscription-id"
 export Azure__ResourceGroup="your-resource-group"
 export Azure__TenantId="your-tenant-id"
 export Azure__DemoMode="false"
+export Azure__OperationTimeoutSeconds="300"
 ```
 
 ## Authentication
@@ -235,7 +237,7 @@ Thresholds can be customized in `appsettings.json` under `HealthThresholds`.
 
 When running with `DemoMode: false`, FuncPulse automatically outputs verbose console logs showing each step of the Azure connection process. This helps diagnose connection stalls or authentication issues.
 
-**Timeouts:** All Azure operations have a 60-second timeout. If authentication or API calls take longer, you'll see a clear timeout error with troubleshooting guidance.
+**Timeouts:** All Azure operations have a configurable timeout (default 300 seconds / 5 minutes). This can be adjusted via `Azure:OperationTimeoutSeconds` in appsettings.json. If authentication or API calls take longer, you'll see a clear timeout error with troubleshooting guidance.
 
 **Example console output:**
 ```

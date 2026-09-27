@@ -8,6 +8,12 @@ public class AzureSettings
     public string ResourceGroup { get; set; } = string.Empty;
     public string? TenantId { get; set; }
     public bool DemoMode { get; set; }
+    
+    /// <summary>
+    /// Timeout in seconds for Azure operations (discovery, metrics, logs).
+    /// Default is 300 seconds (5 minutes) to accommodate slow networks.
+    /// </summary>
+    public int OperationTimeoutSeconds { get; set; } = 300;
 }
 
 public class HealthThresholds
