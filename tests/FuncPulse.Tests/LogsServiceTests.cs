@@ -13,6 +13,7 @@ public class LogsServiceTests
         Assert.Contains("exceptions", query);
         Assert.DoesNotContain("requests", query);
         Assert.Contains("message = coalesce(outerMessage, innermostMessage, problemId, type)", query);
+        Assert.Contains("stackTrace = tostring(details)", query);
         Assert.Contains("| where isnotempty(message)", query);
     }
 

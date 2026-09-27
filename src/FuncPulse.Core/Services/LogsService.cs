@@ -146,7 +146,7 @@ public class LogsService : ILogsService
                         severityLevel = iff(isnull(severityLevel), 3, severityLevel),
                         message = coalesce(outerMessage, innermostMessage, problemId, type),
                         exceptionType = coalesce(type, innermostType),
-                        stackTrace = coalesce(tostring(details[0].parsedStack), '')
+                        stackTrace = tostring(details)
                 )
                 | where isnotempty(message)
                 | order by timestamp asc";
