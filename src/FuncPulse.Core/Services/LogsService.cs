@@ -85,26 +85,22 @@ public class LogsService : ILogsService
             };
 
             var table = response.Value.Table;
+            var columnNames = table.Columns
+                .Select(column => column.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             foreach (var row in table.Rows)
             {
-                var ts = row.GetDateTimeOffset("timestamp")?.UtcDateTime ?? DateTime.UtcNow;
-                var message = row.GetString("message") ?? string.Empty;
-                var severityLevel = row.GetInt32("severityLevel");
-                var exceptionType = row.GetString("exceptionType");
-                var stackTrace = row.GetString("stackTrace");
+                var ts = GetOptionalDateTimeOffset(row, columnNames, "timestamp")?.UtcDateTime ?? DateTime.UtcNow;
+                var message = GetOptionalString(row, columnNames, "message") ?? string.Empty;
+                var severityLevel = GetOptionalInt32(row, columnNames, "severityLevel");
+                var exceptionType = GetOptionalString(row, columnNames, "exceptionType");
+                var stackTrace = GetOptionalString(row, columnNames, "stackTrace");
 
                 log.Entries.Add(new LogEntry
                 {
                     Timestamp = ts,
-                    Level = severityLevel switch
-                    {
-                        0 => "Verbose",
-                        1 => "Information",
-                        2 => "Warning",
-                        3 => "Error",
-                        4 => "Critical",
-                        _ => "Information"
-                    },
+                    Level = GetLogLevel(severityLevel, exceptionType),
                     Message = message,
                     ExceptionType = exceptionType,
                     StackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace
@@ -140,19 +136,40 @@ public class LogsService : ILogsService
                 (
                     exceptions
                     | where operation_Id == operationId
+                    | extend stackFrames = extract_all(@'""method"":""([^""]+)""', tostring(details))
                     | project
                         timestamp,
                         itemType,
                         severityLevel = iff(isnull(severityLevel), 3, severityLevel),
                         message = coalesce(outerMessage, innermostMessage, problemId, type),
                         exceptionType = coalesce(type, innermostType),
-                        stackTrace = tostring(details)
+                        stackTrace = iff(array_length(stackFrames) > 0, strcat_array(stackFrames, '\n'), iff(isnotempty(innermostMethod), strcat('at ', innermostMethod), ''))
                 )
                 | where isnotempty(message)
                 | order by timestamp asc";
     }
 
     internal static string EscapeKqlStringLiteral(string value) => value.Replace("'", "''", StringComparison.Ordinal);
+
+    internal static string GetLogLevel(int? severityLevel, string? exceptionType) => severityLevel switch
+    {
+        0 => "Verbose",
+        1 => "Information",
+        2 => "Warning",
+        3 => "Error",
+        4 => "Critical",
+        null when !string.IsNullOrWhiteSpace(exceptionType) => "Error",
+        _ => "Information"
+    };
+
+    private static DateTimeOffset? GetOptionalDateTimeOffset(LogsTableRow row, ISet<string> columnNames, string columnName) =>
+        columnNames.Contains(columnName) ? row.GetDateTimeOffset(columnName) : null;
+
+    private static int? GetOptionalInt32(LogsTableRow row, ISet<string> columnNames, string columnName) =>
+        columnNames.Contains(columnName) ? row.GetInt32(columnName) : null;
+
+    private static string? GetOptionalString(LogsTableRow row, ISet<string> columnNames, string columnName) =>
+        columnNames.Contains(columnName) ? row.GetString(columnName) : null;
 
     private InvocationLog GenerateDemoLogs(string operationId)
     {
