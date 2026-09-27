@@ -76,13 +76,35 @@ export Azure__OperationTimeoutSeconds="300"
 
 ## Authentication
 
-FuncPulse uses **DefaultAzureCredential** from the Azure Identity library, which automatically attempts authentication in the following order:
+FuncPulse uses **optimized Azure credential selection** based on the runtime environment:
 
-1. **Environment variables** (for service principals)
-2. **Managed Identity** (when deployed to Azure)
-3. **Visual Studio** (when running locally)
-4. **Azure CLI** (when running locally)
-5. **Azure PowerShell** (when running locally)
+### Local Development
+- Uses **AzureCliCredential** 
+- Skips the slow managed identity probe (which can timeout after 30+ seconds)
+- Requires: `az login` before running
+
+### Azure Hosted (App Service, Container Apps, Functions)
+- Uses **DefaultAzureCredential** (full chain)
+- Includes Managed Identity authentication
+- Automatically detected via environment variables (`WEBSITE_INSTANCE_ID`, `IDENTITY_ENDPOINT`, `MSI_ENDPOINT`)
+
+This optimization significantly improves startup time for local development by avoiding the 30+ second managed identity timeout.
+
+### Authentication Methods
+
+### Authentication Methods
+
+The credential selection is automatic:
+
+**Local Development (AzureCliCredential):**
+1. Azure CLI (`az login`)
+
+**Azure Hosted (DefaultAzureCredential):**
+1. Environment variables (for service principals)
+2. Managed Identity (Azure App Service, Container Apps, Functions, VMs)
+3. Azure CLI (fallback)
+4. Azure PowerShell (fallback)
+5. Visual Studio (fallback)
 
 ### Local Development
 

@@ -25,11 +25,12 @@ public class MetricsService : IMetricsService
         if (!_settings.DemoMode)
         {
             var timestamp = DateTime.Now.ToString("HH:mm:ss");
-            Console.WriteLine($"[{timestamp}] MetricsService: Initializing DefaultAzureCredential for Azure Monitor...");
+            var credentialType = AzureCredentialFactory.GetCredentialDescription();
+            Console.WriteLine($"[{timestamp}] MetricsService: Initializing {credentialType} for Azure Monitor...");
             
             try
             {
-                var credential = new DefaultAzureCredential();
+                var credential = AzureCredentialFactory.CreateCredential();
                 _metricsClient = new MetricsQueryClient(credential);
                 Console.WriteLine($"[{timestamp}] MetricsService: MetricsQueryClient created successfully");
             }

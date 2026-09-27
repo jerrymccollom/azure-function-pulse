@@ -25,11 +25,12 @@ public class LogsService : ILogsService
         if (!_settings.DemoMode)
         {
             var timestamp = DateTime.Now.ToString("HH:mm:ss");
-            Console.WriteLine($"[{timestamp}] LogsService: Initializing DefaultAzureCredential for Log Analytics...");
+            var credentialType = AzureCredentialFactory.GetCredentialDescription();
+            Console.WriteLine($"[{timestamp}] LogsService: Initializing {credentialType} for Log Analytics...");
             
             try
             {
-                var credential = new DefaultAzureCredential();
+                var credential = AzureCredentialFactory.CreateCredential();
                 _logsClient = new LogsQueryClient(credential);
                 Console.WriteLine($"[{timestamp}] LogsService: LogsQueryClient created successfully");
             }

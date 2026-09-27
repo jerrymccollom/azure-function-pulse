@@ -30,13 +30,14 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
         else
         {
             var timestamp = DateTime.Now.ToString("HH:mm:ss");
-            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Initializing DefaultAzureCredential...");
+            var credentialType = AzureCredentialFactory.GetCredentialDescription();
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Initializing {credentialType}...");
             
             try
             {
-                var credential = new DefaultAzureCredential();
+                var credential = AzureCredentialFactory.CreateCredential();
                 _armClient = new ArmClient(credential);
-                Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: DefaultAzureCredential created successfully");
+                Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Credential created successfully");
             }
             catch (Exception ex)
             {
