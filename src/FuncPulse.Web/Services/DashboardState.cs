@@ -31,7 +31,7 @@ public sealed class DashboardState
             resourceGroup,
             selectedTimeRange,
             availableResourceGroups.ToList(),
-            functionApps.ToList(),
+            functionApps.Select(CloneApp).ToList(),
             ShouldPromptForRefresh: true);
     }
 
@@ -43,6 +43,65 @@ public sealed class DashboardState
         }
 
         _snapshot = _snapshot with { ShouldPromptForRefresh = false };
+    }
+
+    private static FunctionAppInfo CloneApp(FunctionAppInfo app)
+    {
+        return new FunctionAppInfo
+        {
+            ResourceId = app.ResourceId,
+            Name = app.Name,
+            Location = app.Location,
+            AppInsightsConnectionString = app.AppInsightsConnectionString,
+            AppInsightsResourceId = app.AppInsightsResourceId,
+            Functions = app.Functions.Select(CloneFunction).ToList()
+        };
+    }
+
+    private static FunctionInfo CloneFunction(FunctionInfo function)
+    {
+        return new FunctionInfo
+        {
+            Name = function.Name,
+            TriggerType = function.TriggerType,
+            Metrics = CloneMetrics(function.Metrics),
+            RecentInvocations = function.RecentInvocations.Select(CloneInvocation).ToList()
+        };
+    }
+
+    private static FunctionMetrics? CloneMetrics(FunctionMetrics? metrics)
+    {
+        if (metrics == null)
+        {
+            return null;
+        }
+
+        return new FunctionMetrics
+        {
+            SuccessCount = metrics.SuccessCount,
+            FailureCount = metrics.FailureCount,
+            TimeSeries = metrics.TimeSeries
+                .Select(point => new MetricDataPoint
+                {
+                    Timestamp = point.Timestamp,
+                    SuccessCount = point.SuccessCount,
+                    FailureCount = point.FailureCount
+                })
+                .ToList()
+        };
+    }
+
+    private static FunctionInvocation CloneInvocation(FunctionInvocation invocation)
+    {
+        return new FunctionInvocation
+        {
+            OperationId = invocation.OperationId,
+            Timestamp = invocation.Timestamp,
+            Duration = invocation.Duration,
+            Success = invocation.Success,
+            ResultCode = invocation.ResultCode,
+            ExceptionMessage = invocation.ExceptionMessage
+        };
     }
 }
 
