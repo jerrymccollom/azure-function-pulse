@@ -62,11 +62,7 @@ public class LogsService : ILogsService
 
         try
         {
-            var query = $@"
-                union requests, exceptions, traces
-                | where operation_Id == '{operationId}'
-                | project timestamp, itemType, message, severityLevel, outerMessage, type, problemId, details
-                | order by timestamp asc";
+            var query = BuildInvocationLogsQuery(operationId);
 
             Console.WriteLine($"[{timestamp}] LogsService: Executing KQL query against Application Insights resource...");
             var response = await _logsClient.QueryResourceAsync(
@@ -92,11 +88,10 @@ public class LogsService : ILogsService
             foreach (var row in table.Rows)
             {
                 var ts = row.GetDateTimeOffset("timestamp")?.UtcDateTime ?? DateTime.UtcNow;
-                var itemType = row.GetString("itemType") ?? "trace";
-                var message = row.GetString("message") ?? row.GetString("outerMessage") ?? string.Empty;
+                var message = row.GetString("message") ?? string.Empty;
                 var severityLevel = row.GetInt32("severityLevel");
-                var exceptionType = row.GetString("type");
-                var details = row.GetString("details");
+                var exceptionType = row.GetString("exceptionType");
+                var stackTrace = row.GetString("stackTrace");
 
                 log.Entries.Add(new LogEntry
                 {
@@ -112,7 +107,7 @@ public class LogsService : ILogsService
                     },
                     Message = message,
                     ExceptionType = exceptionType,
-                    StackTrace = details
+                    StackTrace = string.IsNullOrWhiteSpace(stackTrace) ? null : stackTrace
                 });
             }
 
@@ -129,6 +124,35 @@ public class LogsService : ILogsService
             return null;
         }
     }
+
+    internal static string BuildInvocationLogsQuery(string operationId)
+    {
+        var escapedOperationId = EscapeKqlStringLiteral(operationId);
+
+        return $@"
+                let operationId = '{escapedOperationId}';
+                union
+                (
+                    traces
+                    | where operation_Id == operationId
+                    | project timestamp, itemType, severityLevel, message, exceptionType = '', stackTrace = ''
+                ),
+                (
+                    exceptions
+                    | where operation_Id == operationId
+                    | project
+                        timestamp,
+                        itemType,
+                        severityLevel = iff(isnull(severityLevel), 3, severityLevel),
+                        message = coalesce(outerMessage, innermostMessage, problemId, type),
+                        exceptionType = coalesce(type, innermostType),
+                        stackTrace = coalesce(tostring(details[0].parsedStack), '')
+                )
+                | where isnotempty(message)
+                | order by timestamp asc";
+    }
+
+    internal static string EscapeKqlStringLiteral(string value) => value.Replace("'", "''", StringComparison.Ordinal);
 
     private InvocationLog GenerateDemoLogs(string operationId)
     {
