@@ -36,7 +36,20 @@
             <div class="card">
                 <div class="card-body">
                     <h6 class="card-subtitle mb-2 text-muted">Resource Group</h6>
-                    <p class="card-text">@(string.IsNullOrEmpty(resourceGroup) ? "Not configured" : resourceGroup)</p>
+                    @if (!AzureSettings.Value.DemoMode && !string.IsNullOrEmpty(subscriptionId) && availableResourceGroups.Count > 0)
+                    {
+                        <select class="form-select" @onchange="OnResourceGroupChanged" value="@resourceGroup">
+                            <option value="">-- Select Resource Group --</option>
+                            @foreach (var rg in availableResourceGroups)
+                            {
+                                <option value="@rg" selected="@(rg == resourceGroup)">@rg</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <p class="card-text">@(string.IsNullOrEmpty(resourceGroup) ? "Not configured" : resourceGroup)</p>
+                    }
                 </div>
             </div>
         </div>
@@ -288,7 +301,7 @@
             }
             else if (string.IsNullOrEmpty(resourceGroup))
             {
-                // Show resource group picker instead of error
+                // Show resource group picker for initial selection
                 showResourceGroupPicker = true;
             }
         }
@@ -298,16 +311,22 @@
     {
         if (firstRender)
         {
-            // Load resource groups if picker should be shown
-            if (showResourceGroupPicker)
+            if (AzureSettings.Value.DemoMode)
             {
-                await LoadResourceGroupsAsync();
-            }
-            // Load function apps if config is complete
-            else if (AzureSettings.Value.DemoMode || 
-                (!string.IsNullOrEmpty(subscriptionId) && !string.IsNullOrEmpty(resourceGroup)))
-            {
+                // Demo mode: load function apps directly
                 await LoadDataAsync();
+            }
+            else if (!string.IsNullOrEmpty(subscriptionId))
+            {
+                // Always load resource groups for dropdown (whether RG is set or not)
+                await LoadResourceGroupsAsync();
+                
+                // If RG is already configured, load function apps
+                if (!string.IsNullOrEmpty(resourceGroup) && !showResourceGroupPicker)
+                {
+                    await LoadDataAsync();
+                }
+                // Otherwise, showResourceGroupPicker is true and user picks from UI
             }
         }
     }
@@ -399,16 +418,26 @@
         try
         {
             availableResourceGroups = await DiscoveryService.ListResourceGroupsAsync(subscriptionId, cts.Token);
-            showResourceGroupPicker = true;
+            
+            // If resource group picker is shown, keep it visible
+            // Otherwise, we're just populating the dropdown for later use
+            if (!showResourceGroupPicker)
+            {
+                isLoading = false;
+            }
         }
         catch (Exception ex)
         {
             showResourceGroupPicker = false;
             errorMessage = $"Failed to load resource groups: {ex.Message}";
+            isLoading = false;
         }
         finally
         {
-            isLoading = false;
+            if (showResourceGroupPicker)
+            {
+                isLoading = false;
+            }
             StateHasChanged();
         }
     }
@@ -420,6 +449,17 @@
 
         resourceGroup = selectedResourceGroupOption;
         showResourceGroupPicker = false;
+        await LoadDataAsync();
+    }
+
+    private async Task OnResourceGroupChanged(ChangeEventArgs e)
+    {
+        var newResourceGroup = e.Value?.ToString();
+        if (string.IsNullOrEmpty(newResourceGroup) || newResourceGroup == resourceGroup)
+            return;
+
+        resourceGroup = newResourceGroup;
+        functionApps.Clear(); // Clear old data
         await LoadDataAsync();
     }
 
