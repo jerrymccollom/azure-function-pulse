@@ -116,6 +116,66 @@ public class MetricsService : IMetricsService
                 timestamp = DateTime.Now.ToString("HH:mm:ss");
                 Console.WriteLine($"[{timestamp}] MetricsService: Metrics retrieved - {metrics.TotalCount} invocations");
             }
+            catch (Azure.RequestFailedException ex) when (ex.Status == 400 && 
+                (ex.Message.Contains("does not support requested dimension") || 
+                 ex.Message.Contains("dimension combination")))
+            {
+                // Function App doesn't support FunctionName dimension - retry without filter
+                timestamp = DateTime.Now.ToString("HH:mm:ss");
+                Console.WriteLine($"[{timestamp}] MetricsService: FunctionName dimension not supported, querying without filter...");
+                _logger.LogWarning("Function {FunctionName} metrics query failed due to unsupported dimension - querying app-level metrics instead", functionName);
+                
+                try
+                {
+                    // Retry without the FunctionName filter
+                    var fallbackOptions = new MetricsQueryOptions
+                    {
+                        TimeRange = new QueryTimeRange(startTime, endTime),
+                        Granularity = interval
+                        // No Filter - gets all functions in the app
+                    };
+                    
+                    var response = await _metricsClient.QueryResourceAsync(
+                        resourceId,
+                        new[] { "FunctionExecutionCount" },
+                        fallbackOptions,
+                        cancellationToken);
+
+                    if (response?.Value?.Metrics != null)
+                    {
+                        foreach (var metric in response.Value.Metrics)
+                        {
+                            foreach (var timeSeries in metric.TimeSeries)
+                            {
+                                foreach (var dataPoint in timeSeries.Values)
+                                {
+                                    if (dataPoint.Total.HasValue)
+                                    {
+                                        var total = (int)dataPoint.Total.Value;
+                                        metrics.SuccessCount += total;
+                                        metrics.TimeSeries.Add(new MetricDataPoint
+                                        {
+                                            Timestamp = dataPoint.TimeStamp.UtcDateTime,
+                                            SuccessCount = total,
+                                            FailureCount = 0
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    timestamp = DateTime.Now.ToString("HH:mm:ss");
+                    Console.WriteLine($"[{timestamp}] MetricsService: App-level metrics retrieved (not function-specific) - {metrics.TotalCount} invocations");
+                }
+                catch (Exception fallbackEx)
+                {
+                    timestamp = DateTime.Now.ToString("HH:mm:ss");
+                    Console.WriteLine($"[{timestamp}] MetricsService: Fallback metrics query also failed - {fallbackEx.Message}");
+                    _logger.LogWarning(fallbackEx, "Fallback metrics query failed for {FunctionName}", functionName);
+                    // Return empty metrics - don't fail the whole dashboard
+                }
+            }
             catch (Exception ex)
             {
                 timestamp = DateTime.Now.ToString("HH:mm:ss");
