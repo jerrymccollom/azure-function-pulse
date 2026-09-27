@@ -15,7 +15,7 @@
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
                     <li class="breadcrumb-item">@AppName</li>
-                    <li class="breadcrumb-item active">@FunctionName</li>
+                    <li class="breadcrumb-item active">@GetShortFunctionName(FunctionName)</li>
                 </ol>
             </nav>
         </div>
@@ -23,7 +23,7 @@
 
     <div class="row mb-3">
         <div class="col">
-            <h2>@FunctionName</h2>
+            <h2>@GetShortFunctionName(FunctionName)</h2>
             <p class="text-muted">Function App: @AppName</p>
         </div>
     </div>
@@ -319,4 +319,11 @@
         "Information" => "info",
         _ => "secondary"
     };
+
+    private static string GetShortFunctionName(string fullName)
+    {
+        // Extract short name from full path (e.g., "resource-name/function-name" -> "function-name")
+        var lastSlashIndex = fullName.LastIndexOf('/');
+        return lastSlashIndex >= 0 ? fullName.Substring(lastSlashIndex + 1) : fullName;
+    }
 }

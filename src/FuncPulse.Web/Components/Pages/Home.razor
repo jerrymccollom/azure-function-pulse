@@ -160,7 +160,7 @@
                                         };
 
                                         <tr>
-                                            <td>@function.Name</td>
+                                            <td>@GetShortFunctionName(function.Name)</td>
                                             <td><span class="badge bg-info">@function.TriggerType</span></td>
                                             <td><span class="badge bg-@statusClass">@status</span></td>
                                             <td>@(metrics?.TotalCount ?? 0)</td>
@@ -311,6 +311,13 @@
     private void ViewFunctionDetails(FunctionAppInfo app, FunctionInfo function)
     {
         Navigation.NavigateTo($"/function/{Uri.EscapeDataString(app.Name)}/{Uri.EscapeDataString(function.Name)}");
+    }
+
+    private static string GetShortFunctionName(string fullName)
+    {
+        // Extract short name from full path (e.g., "resource-name/function-name" -> "function-name")
+        var lastSlashIndex = fullName.LastIndexOf('/');
+        return lastSlashIndex >= 0 ? fullName.Substring(lastSlashIndex + 1) : fullName;
     }
 }
 
