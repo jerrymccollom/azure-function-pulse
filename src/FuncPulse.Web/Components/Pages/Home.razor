@@ -1,0 +1,506 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using FuncPulse.Core.Models
+@using FuncPulse.Core.Services
+@using Microsoft.Extensions.Options
+@inject IFunctionDiscoveryService DiscoveryService
+@inject IMetricsService MetricsService
+@inject IOptions<AzureSettings> AzureSettings
+@inject NavigationManager Navigation
+
+<PageTitle>FuncPulse - Dashboard</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>FuncPulse Dashboard</h1>
+            @if (AzureSettings.Value.DemoMode)
+            {
+                <div class="alert alert-info">
+                    <strong>Demo Mode:</strong> Showing sample data. Configure Azure credentials to view real functions.
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Subscription</h6>
+                    <p class="card-text">@(string.IsNullOrEmpty(subscriptionId) ? "Not configured" : subscriptionId)</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Resource Group</h6>
+                    @if (!AzureSettings.Value.DemoMode && !string.IsNullOrEmpty(subscriptionId) && availableResourceGroups.Count > 0)
+                    {
+                        <select class="form-select" @onchange="OnResourceGroupChanged" value="@resourceGroup">
+                            <option value="">-- Select Resource Group --</option>
+                            @foreach (var rg in availableResourceGroups)
+                            {
+                                <option value="@rg" selected="@(rg == resourceGroup)">@rg</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <p class="card-text">@(string.IsNullOrEmpty(resourceGroup) ? "Not configured" : resourceGroup)</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col">
+            <label class="form-label">Time Range</label>
+            <div class="btn-group" role="group">
+                @foreach (var range in Enum.GetValues<TimeRange>())
+                {
+                    <button type="button" 
+                            class="btn @(selectedTimeRange == range ? "btn-primary" : "btn-outline-primary")"
+                            @onclick="() => SelectTimeRange(range)">
+                        @range.ToDisplayString()
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-overlay">
+            <div class="loading-content">
+                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h4 class="mt-3">@loadingMessage</h4>
+                <p class="text-muted">@loadingSubMessage</p>
+                <p class="text-muted small">This may take several minutes if authenticating for the first time or on slow networks</p>
+            </div>
+        </div>
+    }
+    else if (showResourceGroupPicker)
+    {
+        <div class="row">
+            <div class="col-lg-8 offset-lg-2">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Select Resource Group</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (availableResourceGroups.Count == 0)
+                        {
+                            <div class="alert alert-warning">
+                                No resource groups found in subscription <strong>@subscriptionId</strong>.
+                                Please ensure you have the correct permissions.
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">
+                                Found @availableResourceGroups.Count resource group(s) in subscription <strong>@subscriptionId</strong>.
+                                Select a resource group to view its Azure Functions:
+                            </p>
+                            <div class="list-group">
+                                @foreach (var rg in availableResourceGroups)
+                                {
+                                    <button type="button" 
+                                            class="list-group-item list-group-item-action @(rg == selectedResourceGroupOption ? "active" : "")"
+                                            @onclick="() => selectedResourceGroupOption = rg">
+                                        @rg
+                                    </button>
+                                }
+                            </div>
+                            @if (!string.IsNullOrEmpty(selectedResourceGroupOption))
+                            {
+                                <div class="mt-3">
+                                    <button class="btn btn-primary" @onclick="ApplyResourceGroupSelection">
+                                        Load Functions from @selectedResourceGroupOption
+                                    </button>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger" style="white-space: pre-line;">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+    else if (functionApps.Count == 0)
+    {
+        <div class="alert alert-warning">
+            No function apps found in the configured resource group.
+        </div>
+    }
+    else
+    {
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h5 class="card-title">@functionApps.Count</h5>
+                        <p class="card-text text-muted">Function Apps</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h5 class="card-title">@totalFunctions</h5>
+                        <p class="card-text text-muted">Total Functions</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">@healthyCount</h5>
+                        <p class="card-text">Healthy</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">@unhealthyCount</h5>
+                        <p class="card-text">Needs Attention</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @foreach (var app in functionApps)
+        {
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>@app.Name <span class="badge bg-secondary">@app.Location</span></h5>
+                </div>
+                <div class="card-body">
+                    @if (app.Functions.Count == 0)
+                    {
+                        <p class="text-muted">No functions found</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Function</th>
+                                        <th>Trigger</th>
+                                        <th>Status</th>
+                                        <th>Invocations</th>
+                                        <th>Success Rate</th>
+                                        <th>Failures</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var function in app.Functions)
+                                    {
+                                        var metrics = function.Metrics;
+                                        var status = metrics?.GetHealthStatus() ?? HealthStatus.Unknown;
+                                        var statusClass = status switch
+                                        {
+                                            HealthStatus.Healthy => "success",
+                                            HealthStatus.Warning => "warning",
+                                            HealthStatus.Critical => "danger",
+                                            _ => "secondary"
+                                        };
+
+                                        <tr>
+                                            <td>@GetShortFunctionName(function.Name)</td>
+                                            <td><span class="badge bg-info">@function.TriggerType</span></td>
+                                            <td><span class="badge bg-@statusClass">@status</span></td>
+                                            <td>@(metrics?.TotalCount ?? 0)</td>
+                                            <td>
+                                                @if (metrics != null && metrics.TotalCount > 0)
+                                                {
+                                                    @($"{(100 - metrics.FailureRate):F1}%")
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">N/A</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (metrics != null && metrics.FailureCount > 0)
+                                                {
+                                                    <span class="badge bg-danger">@metrics.FailureCount</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">0</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary"
+                                                        @onclick="() => ViewFunctionDetails(app, function)">
+                                                    Details
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private string subscriptionId = string.Empty;
+    private string resourceGroup = string.Empty;
+    private TimeRange selectedTimeRange = TimeRange.Hours24;
+    private List<FunctionAppInfo> functionApps = new();
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string loadingMessage = "Loading Function Apps...";
+    private string loadingSubMessage = "Connecting to Azure and discovering functions";
+    
+    private bool showResourceGroupPicker = false;
+    private List<string> availableResourceGroups = new();
+    private string? selectedResourceGroupOption;
+    
+    private int totalFunctions => functionApps.Sum(a => a.Functions.Count);
+    private int healthyCount => functionApps.SelectMany(a => a.Functions)
+        .Count(f => f.Metrics?.GetHealthStatus() == HealthStatus.Healthy);
+    private int unhealthyCount => functionApps.SelectMany(a => a.Functions)
+        .Count(f => {
+            var status = f.Metrics?.GetHealthStatus();
+            return status == HealthStatus.Warning || status == HealthStatus.Critical;
+        });
+
+    protected override async Task OnInitializedAsync()
+    {
+        subscriptionId = AzureSettings.Value.SubscriptionId;
+        resourceGroup = AzureSettings.Value.ResourceGroup;
+        
+        // Don't load data here - it blocks the first render
+        // Data loading moved to OnAfterRenderAsync
+        
+        if (!AzureSettings.Value.DemoMode)
+        {
+            if (string.IsNullOrEmpty(subscriptionId))
+            {
+                isLoading = false;
+                errorMessage = "Azure subscription not configured. Update appsettings.json or environment variables.";
+            }
+            else if (string.IsNullOrEmpty(resourceGroup))
+            {
+                // Show resource group picker for initial selection
+                showResourceGroupPicker = true;
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            if (AzureSettings.Value.DemoMode)
+            {
+                // Demo mode: load function apps directly
+                await LoadDataAsync();
+            }
+            else if (!string.IsNullOrEmpty(subscriptionId))
+            {
+                // Always load resource groups for dropdown (whether RG is set or not)
+                await LoadResourceGroupsAsync();
+                
+                // If RG is already configured, load function apps
+                if (!string.IsNullOrEmpty(resourceGroup) && !showResourceGroupPicker)
+                {
+                    await LoadDataAsync();
+                }
+                // Otherwise, showResourceGroupPicker is true and user picks from UI
+            }
+        }
+    }
+
+    private async Task SelectTimeRange(TimeRange range)
+    {
+        selectedTimeRange = range;
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        loadingMessage = "Loading Function Apps...";
+        loadingSubMessage = "Connecting to Azure and discovering functions";
+        StateHasChanged();
+
+        // Add timeout protection - configurable via appsettings (default 300 seconds / 5 minutes)
+        var timeoutSeconds = AzureSettings.Value.OperationTimeoutSeconds;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+
+        try
+        {
+            functionApps = await DiscoveryService.DiscoverFunctionAppsAsync(
+                subscriptionId, 
+                resourceGroup, 
+                cts.Token);
+            
+            // Batch metrics per app instead of per function
+            foreach (var app in functionApps)
+            {
+                cts.Token.ThrowIfCancellationRequested();
+                
+                loadingMessage = $"Loading metrics for {app.Name}...";
+                StateHasChanged();
+                
+                // Get all metrics for this app in one query
+                var appMetrics = await MetricsService.GetAppMetricsAsync(app, selectedTimeRange, cts.Token);
+                
+                // Map metrics to functions by short name
+                foreach (var function in app.Functions)
+                {
+                    var shortName = GetShortFunctionName(function.Name);
+                    if (appMetrics.TryGetValue(shortName, out var metrics))
+                    {
+                        function.Metrics = metrics;
+                    }
+                    else
+                    {
+                        function.Metrics = new FunctionMetrics(); // zeros
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: TIMEOUT after {timeoutSeconds} seconds");
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: This usually indicates slow authentication or network issues");
+            errorMessage = $"Operation timed out after {timeoutSeconds} seconds. This usually means:\n" +
+                          "• Azure CLI authentication is slow or stale (try: az login --use-device-code)\n" +
+                          "• Network connectivity issues to Azure\n" +
+                          "• Insufficient permissions on the subscription/resource group\n" +
+                          "Check the console output for details on where the operation stalled.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load function apps: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadResourceGroupsAsync()
+    {
+        isLoading = true;
+        loadingMessage = "Loading Resource Groups...";
+        loadingSubMessage = "Connecting to Azure and discovering resource groups";
+        errorMessage = null;
+        StateHasChanged();
+
+        var timeoutSeconds = AzureSettings.Value.OperationTimeoutSeconds;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+
+        try
+        {
+            availableResourceGroups = await DiscoveryService.ListResourceGroupsAsync(subscriptionId, cts.Token);
+            
+            // If resource group picker is shown, keep it visible
+            // Otherwise, we're just populating the dropdown for later use
+            if (!showResourceGroupPicker)
+            {
+                isLoading = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            showResourceGroupPicker = false;
+            errorMessage = $"Failed to load resource groups: {ex.Message}";
+            isLoading = false;
+        }
+        finally
+        {
+            if (showResourceGroupPicker)
+            {
+                isLoading = false;
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task ApplyResourceGroupSelection()
+    {
+        if (string.IsNullOrEmpty(selectedResourceGroupOption))
+            return;
+
+        resourceGroup = selectedResourceGroupOption;
+        showResourceGroupPicker = false;
+        await LoadDataAsync();
+    }
+
+    private async Task OnResourceGroupChanged(ChangeEventArgs e)
+    {
+        var newResourceGroup = e.Value?.ToString();
+        if (string.IsNullOrEmpty(newResourceGroup) || newResourceGroup == resourceGroup)
+            return;
+
+        resourceGroup = newResourceGroup;
+        functionApps.Clear(); // Clear old data
+        await LoadDataAsync();
+    }
+
+    private void ViewFunctionDetails(FunctionAppInfo app, FunctionInfo function)
+    {
+        Navigation.NavigateTo($"/function/{Uri.EscapeDataString(app.Name)}/{Uri.EscapeDataString(function.Name)}");
+    }
+
+    private static string GetShortFunctionName(string fullName)
+    {
+        // Extract short name from full path (e.g., "resource-name/function-name" -> "function-name")
+        var lastSlashIndex = fullName.LastIndexOf('/');
+        return lastSlashIndex >= 0 ? fullName.Substring(lastSlashIndex + 1) : fullName;
+    }
+}
+
+<style>
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255, 255, 255, 0.95);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .loading-content {
+        text-align: center;
+        padding: 2rem;
+    }
+
+    .loading-content h4 {
+        color: #333;
+        margin-top: 1rem;
+    }
+
+    .loading-content p {
+        color: #666;
+    }
+</style>
