@@ -302,6 +302,7 @@
             {
                 if (restoredFromState)
                 {
+                    await LoadResourceGroupsAsync(showLoadingState: false);
                     return;
                 }
 
@@ -392,13 +393,21 @@
         }
     }
 
-    private async Task LoadResourceGroupsAsync()
+    private async Task LoadResourceGroupsAsync(bool showLoadingState = true)
     {
-        isLoading = true;
-        loadingMessage = "Loading Resource Groups...";
-        loadingSubMessage = "Connecting to Azure and discovering resource groups";
+        if (showLoadingState)
+        {
+            isLoading = true;
+            loadingMessage = "Loading Resource Groups...";
+            loadingSubMessage = "Connecting to Azure and discovering resource groups";
+        }
+
         errorMessage = null;
-        StateHasChanged();
+        
+        if (showLoadingState)
+        {
+            StateHasChanged();
+        }
 
         var timeoutSeconds = AzureSettings.Value.OperationTimeoutSeconds;
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
@@ -413,8 +422,11 @@
         }
         finally
         {
-            isLoading = false;
-            StateHasChanged();
+            if (showLoadingState)
+            {
+                isLoading = false;
+                StateHasChanged();
+            }
         }
     }
 
