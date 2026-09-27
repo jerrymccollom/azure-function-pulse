@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FuncPulse.Core\FuncPulse.Core.csproj" />
+    <ProjectReference Include="..\..\src\FuncPulse.Web\FuncPulse.Web.csproj" />
   </ItemGroup>
 
 </Project>
