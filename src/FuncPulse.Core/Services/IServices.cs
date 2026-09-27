@@ -19,3 +19,21 @@ public interface ILogsService
 {
     Task<InvocationLog?> GetInvocationLogsAsync(string appInsightsResourceId, string operationId, CancellationToken cancellationToken = default);
 }
+
+public interface IFunctionManagementService
+{
+    Task<FunctionAppState> GetStateAsync(string resourceId, CancellationToken cancellationToken = default);
+    Task<bool> StartAsync(string resourceId, CancellationToken cancellationToken = default);
+    Task<bool> StopAsync(string resourceId, CancellationToken cancellationToken = default);
+    Task<bool> RestartAsync(string resourceId, CancellationToken cancellationToken = default);
+    Task<bool> CanManageAsync(string subscriptionId, string resourceGroup, CancellationToken cancellationToken = default);
+}
+
+public enum FunctionAppState
+{
+    Unknown,
+    Running,
+    Stopped,
+    Starting,
+    Stopping
+}
