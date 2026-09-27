@@ -74,7 +74,24 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
             {
                 var resourceGroupResource = await subscription.GetResourceGroupAsync(resourceGroup, cancellationToken);
                 timestamp = DateTime.Now.ToString("HH:mm:ss");
-                Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Resource group found, listing web apps...");
+                Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Resource group found, discovering Application Insights components...");
+                
+                // Discover Application Insights component in this resource group (cache for all apps)
+                string? appInsightsResourceId = await DiscoverAppInsightsInResourceGroupAsync(
+                    resourceGroupResource.Value, 
+                    cancellationToken);
+                
+                if (!string.IsNullOrEmpty(appInsightsResourceId))
+                {
+                    Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Found Application Insights: {appInsightsResourceId[..Math.Min(80, appInsightsResourceId.Length)]}...");
+                }
+                else
+                {
+                    Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: No Application Insights components found in resource group");
+                }
+                
+                timestamp = DateTime.Now.ToString("HH:mm:ss");
+                Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Listing web apps...");
                 
                 var webApps = resourceGroupResource.Value.GetWebSites();
 
@@ -106,16 +123,15 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
                         
                         if (!string.IsNullOrEmpty(appInfo.AppInsightsConnectionString))
                         {
-                            // Parse Application Insights Resource ID from connection string
-                            // Connection string format: InstrumentationKey=xxx;IngestionEndpoint=https://...;LiveEndpoint=https://...
-                            // Or may contain explicit resource ID
-                            appInfo.AppInsightsResourceId = ParseAppInsightsResourceId(appInfo.AppInsightsConnectionString, subscription, appInfo.Name);
-                            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService:   - App Insights connected");
-                            if (!string.IsNullOrEmpty(appInfo.AppInsightsResourceId))
-                            {
-                                Console.WriteLine($"[{timestamp}] FunctionDiscoveryService:   - App Insights Resource ID: {appInfo.AppInsightsResourceId[..Math.Min(60, appInfo.AppInsightsResourceId.Length)]}...");
-                            }
+                            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService:   - App Insights connection string found");
                         }
+                    }
+                    
+                    // Use discovered AI component for all apps in this resource group
+                    appInfo.AppInsightsResourceId = appInsightsResourceId;
+                    if (!string.IsNullOrEmpty(appInfo.AppInsightsResourceId))
+                    {
+                        Console.WriteLine($"[{timestamp}] FunctionDiscoveryService:   - App Insights Resource ID assigned");
                     }
 
                     try
@@ -287,51 +303,36 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
         };
     }
 
-    private string? ParseAppInsightsResourceId(string connectionString, Azure.ResourceManager.Resources.SubscriptionResource subscription, string functionAppName)
+    private async Task<string?> DiscoverAppInsightsInResourceGroupAsync(
+        Azure.ResourceManager.Resources.ResourceGroupResource resourceGroup,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            // Try to extract the Application Insights component name from the connection string
-            // For Azure-deployed apps, we'll try to find the AI resource by convention (same name or appName-ai)
-            // Connection string format: InstrumentationKey=xxx;IngestionEndpoint=https://xxx.in.applicationinsights.azure.com/;...
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
             
-            // Extract the ingestion endpoint to get region hint
-            var parts = connectionString.Split(';');
-            string? region = null;
+            // List all resources in the resource group filtered by type microsoft.insights/components
+            // GetGenericResources returns Pageable<GenericResource> (sync enumerable)
+            var resources = resourceGroup.GetGenericResources(
+                filter: "resourceType eq 'microsoft.insights/components'",
+                cancellationToken: cancellationToken);
             
-            foreach (var part in parts)
+            // Iterate and return the first Application Insights component found
+            // If multiple exist, use the first one (documented in log)
+            foreach (var resource in resources)
             {
-                if (part.StartsWith("IngestionEndpoint=", StringComparison.OrdinalIgnoreCase))
-                {
-                    var endpoint = part.Substring("IngestionEndpoint=".Length);
-                    // Extract region from endpoint like https://eastus-1.in.applicationinsights.azure.com/
-                    if (endpoint.Contains(".in.applicationinsights.azure.com"))
-                    {
-                        var host = new Uri(endpoint).Host;
-                        region = host.Split('.')[0]; // e.g., "eastus-1"
-                    }
-                }
+                timestamp = DateTime.Now.ToString("HH:mm:ss");
+                Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Discovered AI component '{resource.Data.Name}' (first of potentially multiple)");
+                return resource.Id.ToString();
             }
             
-            // Build a conventional AI resource ID
-            // Pattern: /subscriptions/{sub}/resourceGroups/{rg}/providers/microsoft.insights/components/{name}
-            var subscriptionId = subscription.Id.ToString().Split('/').Last();
-            
-            // Try common naming conventions: appName-ai, appName-insights, or just appName
-            var possibleNames = new[] { $"{functionAppName}-ai", $"{functionAppName}-insights", functionAppName };
-            
-            // For now, construct a likely resource ID based on the subscription and function app location
-            // In a real implementation, we could query the subscription for AI components
-            // Since we have limited context, we'll construct the most likely path
-            var resourceGroupName = subscription.Id.ToString().Contains("resourceGroups/") 
-                ? subscription.Id.ToString().Split("resourceGroups/")[1].Split('/')[0]
-                : "unknown";
-            
-            // Return the most likely AI resource ID
-            return $"{subscription.Id}/providers/microsoft.insights/components/{functionAppName}";
+            return null;
         }
-        catch
+        catch (Exception ex)
         {
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: ERROR discovering Application Insights - {ex.Message}");
+            _logger.LogWarning(ex, "Failed to discover Application Insights in resource group");
             return null;
         }
     }
