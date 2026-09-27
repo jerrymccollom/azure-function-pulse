@@ -322,6 +322,8 @@
     {
         isLoading = true;
         errorMessage = null;
+        loadingMessage = "Loading Function Apps...";
+        loadingSubMessage = "Connecting to Azure and discovering functions";
         StateHasChanged();
 
         // Add timeout protection - configurable via appsettings (default 300 seconds / 5 minutes)
@@ -335,18 +337,29 @@
                 resourceGroup, 
                 cts.Token);
             
+            // Batch metrics per app instead of per function
             foreach (var app in functionApps)
             {
+                cts.Token.ThrowIfCancellationRequested();
+                
+                loadingMessage = $"Loading metrics for {app.Name}...";
+                StateHasChanged();
+                
+                // Get all metrics for this app in one query
+                var appMetrics = await MetricsService.GetAppMetricsAsync(app, selectedTimeRange, cts.Token);
+                
+                // Map metrics to functions by short name
                 foreach (var function in app.Functions)
                 {
-                    // Check if cancelled before each metrics call
-                    cts.Token.ThrowIfCancellationRequested();
-                    
-                    function.Metrics = await MetricsService.GetFunctionMetricsAsync(
-                        app.ResourceId, 
-                        function.Name, 
-                        selectedTimeRange,
-                        cts.Token);
+                    var shortName = GetShortFunctionName(function.Name);
+                    if (appMetrics.TryGetValue(shortName, out var metrics))
+                    {
+                        function.Metrics = metrics;
+                    }
+                    else
+                    {
+                        function.Metrics = new FunctionMetrics(); // zeros
+                    }
                 }
             }
         }

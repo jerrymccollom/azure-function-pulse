@@ -68,9 +68,9 @@ public class LogsService : ILogsService
                 | project timestamp, itemType, message, severityLevel, outerMessage, type, problemId, details
                 | order by timestamp asc";
 
-            Console.WriteLine($"[{timestamp}] LogsService: Executing KQL query against workspace...");
-            var response = await _logsClient.QueryWorkspaceAsync(
-                appInsightsResourceId,
+            Console.WriteLine($"[{timestamp}] LogsService: Executing KQL query against Application Insights resource...");
+            var response = await _logsClient.QueryResourceAsync(
+                new ResourceIdentifier(appInsightsResourceId),
                 query,
                 new QueryTimeRange(TimeSpan.FromHours(24)),
                 cancellationToken: cancellationToken);

@@ -80,4 +80,29 @@ public class ResourceGroupDiscoveryTests
         Assert.Contains(apps, a => a.Name == "data-sync");
         Assert.Contains(apps, a => a.Name == "reporting");
     }
+
+    [Fact]
+    public async Task DiscoverFunctionAppsAsync_InDemoMode_PopulatesAppInsightsResourceId()
+    {
+        // Arrange
+        var settings = Options.Create(new AzureSettings 
+        { 
+            DemoMode = true,
+            SubscriptionId = "demo-sub",
+            ResourceGroup = "demo-rg"
+        });
+        var logger = NullLogger<FunctionDiscoveryService>.Instance;
+        var service = new FunctionDiscoveryService(settings, logger);
+
+        // Act
+        var apps = await service.DiscoverFunctionAppsAsync("demo-sub", "demo-rg");
+
+        // Assert
+        Assert.NotNull(apps);
+        Assert.All(apps, app =>
+        {
+            Assert.NotNull(app.AppInsightsResourceId);
+            Assert.Contains("/providers/microsoft.insights/components/", app.AppInsightsResourceId);
+        });
+    }
 }

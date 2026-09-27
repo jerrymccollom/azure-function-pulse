@@ -11,7 +11,7 @@ namespace FuncPulse.Core.Services;
 
 public class MetricsService : IMetricsService
 {
-    private readonly MetricsQueryClient? _metricsClient;
+    private readonly LogsQueryClient? _logsClient;
     private readonly ILogger<MetricsService> _logger;
     private readonly AzureSettings _settings;
 
@@ -26,19 +26,142 @@ public class MetricsService : IMetricsService
         {
             var timestamp = DateTime.Now.ToString("HH:mm:ss");
             var credentialType = AzureCredentialFactory.GetCredentialDescription();
-            Console.WriteLine($"[{timestamp}] MetricsService: Initializing {credentialType} for Azure Monitor...");
+            Console.WriteLine($"[{timestamp}] MetricsService: Initializing {credentialType} for Application Insights...");
             
             try
             {
                 var credential = AzureCredentialFactory.CreateCredential();
-                _metricsClient = new MetricsQueryClient(credential);
-                Console.WriteLine($"[{timestamp}] MetricsService: MetricsQueryClient created successfully");
+                _logsClient = new LogsQueryClient(credential);
+                Console.WriteLine($"[{timestamp}] MetricsService: LogsQueryClient created successfully");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[{timestamp}] MetricsService: ERROR creating client - {ex.Message}");
                 throw;
             }
+        }
+    }
+
+    public async Task<Dictionary<string, FunctionMetrics>> GetAppMetricsAsync(
+        FunctionAppInfo app,
+        TimeRange timeRange,
+        CancellationToken cancellationToken = default)
+    {
+        var result = new Dictionary<string, FunctionMetrics>();
+        
+        if (_settings.DemoMode)
+        {
+            // Return demo metrics for each function
+            foreach (var function in app.Functions)
+            {
+                var shortName = GetShortFunctionName(function.Name);
+                result[shortName] = GenerateDemoMetrics(function.Name, timeRange);
+            }
+            return result;
+        }
+
+        if (_logsClient == null || string.IsNullOrEmpty(app.AppInsightsResourceId))
+        {
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
+            if (string.IsNullOrEmpty(app.AppInsightsResourceId))
+            {
+                Console.WriteLine($"[{timestamp}] MetricsService: App '{app.Name}' has no Application Insights configured - returning zeros");
+            }
+            else
+            {
+                Console.WriteLine($"[{timestamp}] MetricsService: LogsQueryClient is null - returning zeros");
+            }
+            
+            // Return zero metrics for all functions
+            foreach (var function in app.Functions)
+            {
+                var shortName = GetShortFunctionName(function.Name);
+                result[shortName] = new FunctionMetrics();
+            }
+            return result;
+        }
+
+        var timestamp2 = DateTime.Now.ToString("HH:mm:ss");
+        Console.WriteLine($"[{timestamp2}] MetricsService: Querying Application Insights for app '{app.Name}' over {timeRange.ToDisplayString()}...");
+
+        try
+        {
+            var timeSpan = timeRange.ToTimeSpan();
+            
+            // Batch query: get all function metrics in one KQL query
+            var query = $@"
+                requests
+                | where timestamp >= ago({FormatTimeSpan(timeSpan)})
+                | summarize 
+                    SuccessCount = countif(success == true), 
+                    FailureCount = countif(success == false) 
+                    by name
+                | project name, SuccessCount, FailureCount";
+
+            Console.WriteLine($"[{timestamp2}] MetricsService: Executing KQL query against Application Insights...");
+            
+            var response = await _logsClient.QueryResourceAsync(
+                new ResourceIdentifier(app.AppInsightsResourceId),
+                query,
+                new QueryTimeRange(timeSpan),
+                cancellationToken: cancellationToken);
+
+            if (response?.Value?.Table != null)
+            {
+                var table = response.Value.Table;
+                timestamp2 = DateTime.Now.ToString("HH:mm:ss");
+                Console.WriteLine($"[{timestamp2}] MetricsService: Retrieved {table.Rows.Count} function metric rows");
+                
+                foreach (var row in table.Rows)
+                {
+                    var functionName = row.GetString("name");
+                    var successCount = row.GetInt32("SuccessCount") ?? 0;
+                    var failureCount = row.GetInt32("FailureCount") ?? 0;
+                    
+                    if (!string.IsNullOrEmpty(functionName))
+                    {
+                        result[functionName] = new FunctionMetrics
+                        {
+                            SuccessCount = successCount,
+                            FailureCount = failureCount
+                        };
+                        Console.WriteLine($"[{timestamp2}] MetricsService:   - {functionName}: {successCount} success, {failureCount} failures");
+                    }
+                }
+            }
+            
+            // Ensure all functions have metrics (zeros if not found in results)
+            foreach (var function in app.Functions)
+            {
+                var shortName = GetShortFunctionName(function.Name);
+                if (!result.ContainsKey(shortName))
+                {
+                    result[shortName] = new FunctionMetrics();
+                }
+            }
+            
+            timestamp2 = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp2}] MetricsService: App metrics complete - {result.Count} functions");
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            timestamp2 = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp2}] MetricsService: ERROR querying Application Insights - {ex.Message}");
+            _logger.LogWarning(ex, "Failed to query metrics for app {AppName}", app.Name);
+            
+            // Return zeros for all functions on error
+            foreach (var function in app.Functions)
+            {
+                var shortName = GetShortFunctionName(function.Name);
+                if (!result.ContainsKey(shortName))
+                {
+                    result[shortName] = new FunctionMetrics();
+                }
+            }
+            
+            return result;
         }
     }
 
@@ -53,94 +176,15 @@ public class MetricsService : IMetricsService
             return GenerateDemoMetrics(functionName, timeRange);
         }
 
-        var timestamp = DateTime.Now.ToString("HH:mm:ss");
-        Console.WriteLine($"[{timestamp}] MetricsService: Querying metrics for function '{functionName}' over {timeRange.ToDisplayString()}...");
-
-        try
-        {
-            var endTime = DateTimeOffset.UtcNow;
-            var startTime = endTime - timeRange.ToTimeSpan();
-            
-            // Parse ISO-8601 duration (e.g., "PT1H", "P1D") using XmlConvert
-            var intervalString = timeRange.ToMetricInterval();
-            var interval = System.Xml.XmlConvert.ToTimeSpan(intervalString);
-
-            var metrics = new FunctionMetrics();
-            
-            if (_metricsClient == null)
-            {
-                Console.WriteLine($"[{timestamp}] MetricsService: ERROR - MetricsQueryClient is null");
-                return metrics;
-            }
-
-            // FunctionExecutionCount does NOT support 'functionname' dimension
-            // Supported dimensions: Instance, TraceId only
-            // Query at Function App resource level without per-function filter
-            var options = new MetricsQueryOptions
-            {
-                TimeRange = new QueryTimeRange(startTime, endTime),
-                Granularity = interval
-                // No Filter - FunctionExecutionCount doesn't support FunctionName dimension
-            };
-
-            try
-            {
-                Console.WriteLine($"[{timestamp}] MetricsService: Calling Azure Monitor Metrics API (app-level FunctionExecutionCount)...");
-                var response = await _metricsClient.QueryResourceAsync(
-                    resourceId,
-                    new[] { "FunctionExecutionCount" },
-                    options,
-                    cancellationToken);
-
-                if (response?.Value?.Metrics != null)
-                {
-                    foreach (var metric in response.Value.Metrics)
-                    {
-                        foreach (var timeSeries in metric.TimeSeries)
-                        {
-                            foreach (var dataPoint in timeSeries.Values)
-                            {
-                                if (dataPoint.Total.HasValue)
-                                {
-                                    var total = (int)dataPoint.Total.Value;
-                                    metrics.SuccessCount += total;
-                                    metrics.TimeSeries.Add(new MetricDataPoint
-                                    {
-                                        Timestamp = dataPoint.TimeStamp.UtcDateTime,
-                                        SuccessCount = total,
-                                        FailureCount = 0
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                timestamp = DateTime.Now.ToString("HH:mm:ss");
-                Console.WriteLine($"[{timestamp}] MetricsService: Metrics retrieved - {metrics.TotalCount} invocations");
-            }
-            catch (Exception ex)
-            {
-                timestamp = DateTime.Now.ToString("HH:mm:ss");
-                Console.WriteLine($"[{timestamp}] MetricsService: ERROR querying metrics - {ex.Message}");
-                _logger.LogWarning(ex, "Failed to query metrics for {FunctionName}", functionName);
-            }
-
-            return metrics;
-        }
-        catch (Exception ex)
-        {
-            timestamp = DateTime.Now.ToString("HH:mm:ss");
-            Console.WriteLine($"[{timestamp}] MetricsService: ERROR - {ex.GetType().Name}: {ex.Message}");
-            _logger.LogError(ex, "Error getting metrics for function {FunctionName}", functionName);
-            throw;
-        }
+        // This method is kept for compatibility but returns zeros in real mode
+        // Real metrics should use GetAppMetricsAsync for batched queries
+        return new FunctionMetrics();
     }
 
     public async Task<List<FunctionInvocation>> GetInvocationsAsync(
-        string resourceId, 
-        string functionName, 
-        TimeRange timeRange, 
+        string appInsightsResourceId,
+        string functionName,
+        TimeRange timeRange,
         CancellationToken cancellationToken = default)
     {
         if (_settings.DemoMode)
@@ -148,8 +192,92 @@ public class MetricsService : IMetricsService
             return GenerateDemoInvocations(functionName, timeRange);
         }
 
-        await Task.CompletedTask;
-        return new List<FunctionInvocation>();
+        if (_logsClient == null || string.IsNullOrEmpty(appInsightsResourceId))
+        {
+            return new List<FunctionInvocation>();
+        }
+
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        Console.WriteLine($"[{timestamp}] MetricsService: Querying invocations for function '{functionName}'...");
+
+        try
+        {
+            var timeSpan = timeRange.ToTimeSpan();
+            var shortName = GetShortFunctionName(functionName);
+            
+            var query = $@"
+                requests
+                | where timestamp >= ago({FormatTimeSpan(timeSpan)})
+                | where name == '{shortName}'
+                | project 
+                    operation_Id, 
+                    timestamp, 
+                    duration, 
+                    success, 
+                    resultCode, 
+                    customDimensions
+                | order by timestamp desc
+                | limit 100";
+
+            var response = await _logsClient.QueryResourceAsync(
+                new ResourceIdentifier(appInsightsResourceId),
+                query,
+                new QueryTimeRange(timeSpan),
+                cancellationToken: cancellationToken);
+
+            var invocations = new List<FunctionInvocation>();
+            
+            if (response?.Value?.Table != null)
+            {
+                var table = response.Value.Table;
+                
+                foreach (var row in table.Rows)
+                {
+                    var operationId = row.GetString("operation_Id") ?? Guid.NewGuid().ToString();
+                    var ts = row.GetDateTimeOffset("timestamp")?.UtcDateTime ?? DateTime.UtcNow;
+                    var duration = row.GetDouble("duration") ?? 0;
+                    var success = row.GetBoolean("success") ?? true;
+                    var resultCode = row.GetString("resultCode");
+                    
+                    invocations.Add(new FunctionInvocation
+                    {
+                        OperationId = operationId,
+                        Timestamp = ts,
+                        Duration = TimeSpan.FromMilliseconds(duration),
+                        Success = success,
+                        ResultCode = resultCode,
+                        ExceptionMessage = success ? null : "Invocation failed"
+                    });
+                }
+            }
+            
+            timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] MetricsService: Retrieved {invocations.Count} invocations");
+            
+            return invocations;
+        }
+        catch (Exception ex)
+        {
+            timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] MetricsService: ERROR querying invocations - {ex.Message}");
+            _logger.LogWarning(ex, "Failed to query invocations for {FunctionName}", functionName);
+            return new List<FunctionInvocation>();
+        }
+    }
+
+    private string FormatTimeSpan(TimeSpan timeSpan)
+    {
+        if (timeSpan.TotalDays >= 1)
+            return $"{(int)timeSpan.TotalDays}d";
+        if (timeSpan.TotalHours >= 1)
+            return $"{(int)timeSpan.TotalHours}h";
+        return $"{(int)timeSpan.TotalMinutes}m";
+    }
+
+    private string GetShortFunctionName(string fullName)
+    {
+        var lastSlashIndex = fullName.LastIndexOf('/');
+        return lastSlashIndex >= 0 ? fullName.Substring(lastSlashIndex + 1) : fullName;
     }
 
     private FunctionMetrics GenerateDemoMetrics(string functionName, TimeRange timeRange)
