@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FuncPulse.Core.Models
 @using FuncPulse.Core.Services
+@using FuncPulse.Web.Services
 @inject IMetricsService MetricsService
 @inject ILogsService LogsService
 @inject NavigationManager Navigation
@@ -25,6 +26,11 @@
         <div class="col">
             <h2>@GetShortFunctionName(FunctionName)</h2>
             <p class="text-muted">Function App: @AppName</p>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-outline-secondary" @onclick="BackToDashboard">
+                Back to Dashboard
+            </button>
         </div>
     </div>
 
@@ -229,6 +235,10 @@
     [Parameter]
     public string FunctionName { get; set; } = string.Empty;
 
+    [Parameter]
+    [SupplyParameterFromQuery(Name = FunctionDetailsNavigation.AppInsightsResourceIdQueryParameter)]
+    public string? AppInsightsResourceId { get; set; }
+
     private TimeRange selectedTimeRange = TimeRange.Hours24;
     private List<FunctionInvocation> invocations = new();
     private FunctionInvocation? selectedInvocation;
@@ -259,7 +269,7 @@
         {
             // In a real implementation, we would need the resource ID
             invocations = await MetricsService.GetInvocationsAsync(
-                string.Empty, 
+                AppInsightsResourceId ?? string.Empty,
                 FunctionName, 
                 selectedTimeRange);
         }
@@ -286,7 +296,7 @@
         {
             // In a real implementation, we would need the App Insights resource ID
             invocationLog = await LogsService.GetInvocationLogsAsync(
-                string.Empty, 
+                AppInsightsResourceId ?? string.Empty,
                 invocation.OperationId);
 
             if (invocationLog == null || invocationLog.Entries.Count == 0)
@@ -310,6 +320,11 @@
         selectedInvocation = null;
         invocationLog = null;
         logsUnavailableMessage = null;
+    }
+
+    private void BackToDashboard()
+    {
+        Navigation.NavigateTo("/");
     }
 
     private string GetLogLevelBadgeClass(string level) => level switch

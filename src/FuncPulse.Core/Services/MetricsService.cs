@@ -6,6 +6,7 @@ using Azure.Monitor.Query.Models;
 using FuncPulse.Core.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 
 namespace FuncPulse.Core.Services;
 
@@ -236,7 +237,7 @@ public class MetricsService : IMetricsService
                     var operationId = row.GetString("operation_Id") ?? Guid.NewGuid().ToString();
                     var ts = row.GetDateTimeOffset("timestamp")?.UtcDateTime ?? DateTime.UtcNow;
                     var duration = row.GetDouble("duration") ?? 0;
-                    var success = row.GetBoolean("success") ?? true;
+                    var success = ParseSuccessValue(row["success"]);
                     var resultCode = row.GetString("resultCode");
                     
                     invocations.Add(new FunctionInvocation
@@ -272,6 +273,28 @@ public class MetricsService : IMetricsService
         if (timeSpan.TotalHours >= 1)
             return $"{(int)timeSpan.TotalHours}h";
         return $"{(int)timeSpan.TotalMinutes}m";
+    }
+
+    internal static bool ParseSuccessValue(object? rawValue)
+    {
+        return rawValue switch
+        {
+            null => true,
+            bool value => value,
+            string value when bool.TryParse(value, out var parsed) => parsed,
+            byte value => value != 0,
+            short value => value != 0,
+            int value => value != 0,
+            long value => value != 0,
+            double value => value != 0,
+            decimal value => value != 0,
+            JsonElement { ValueKind: JsonValueKind.True } => true,
+            JsonElement { ValueKind: JsonValueKind.False } => false,
+            JsonElement { ValueKind: JsonValueKind.String } value when bool.TryParse(value.GetString(), out var parsed) => parsed,
+            JsonElement { ValueKind: JsonValueKind.Number } value when value.TryGetInt64(out var parsed) => parsed != 0,
+            JsonElement { ValueKind: JsonValueKind.Number } value when value.TryGetDouble(out var parsed) => parsed != 0,
+            _ => true
+        };
     }
 
     private string GetShortFunctionName(string fullName)

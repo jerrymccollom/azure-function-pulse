@@ -1,6 +1,7 @@
 using FuncPulse.Web.Components;
 using FuncPulse.Core.Models;
 using FuncPulse.Core.Services;
+using FuncPulse.Web.Services;
 
 var timestamp = DateTime.Now.ToString("HH:mm:ss");
 Console.WriteLine($"[{timestamp}] FuncPulse starting...");
@@ -45,6 +46,7 @@ if (azureSettings != null)
 builder.Services.AddSingleton<IFunctionDiscoveryService, FunctionDiscoveryService>();
 builder.Services.AddSingleton<IMetricsService, MetricsService>();
 builder.Services.AddSingleton<ILogsService, LogsService>();
+builder.Services.AddScoped<DashboardState>();
 
 timestamp = DateTime.Now.ToString("HH:mm:ss");
 Console.WriteLine($"[{timestamp}] Building application...");

@@ -2,6 +2,7 @@ using FuncPulse.Core.Models;
 using FuncPulse.Core.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 using Xunit;
 
 namespace FuncPulse.Tests;
@@ -143,5 +144,29 @@ public class MetricsServiceTests
             Assert.NotNull(inv.OperationId);
             Assert.True(inv.Duration > TimeSpan.Zero);
         });
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    [InlineData(1, true)]
+    [InlineData(0, false)]
+    public void ParseSuccessValue_AcceptsBooleanAndStringRepresentations(object rawValue, bool expected)
+    {
+        var parsed = MetricsService.ParseSuccessValue(rawValue);
+
+        Assert.Equal(expected, parsed);
+    }
+
+    [Fact]
+    public void ParseSuccessValue_AcceptsJsonStringBoolean()
+    {
+        using var document = JsonDocument.Parse("""{"success":"false"}""");
+
+        var parsed = MetricsService.ParseSuccessValue(document.RootElement.GetProperty("success"));
+
+        Assert.False(parsed);
     }
 }

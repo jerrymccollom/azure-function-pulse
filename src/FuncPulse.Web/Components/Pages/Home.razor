@@ -2,11 +2,13 @@
 @rendermode InteractiveServer
 @using FuncPulse.Core.Models
 @using FuncPulse.Core.Services
+@using FuncPulse.Web.Services
 @using Microsoft.Extensions.Options
 @inject IFunctionDiscoveryService DiscoveryService
 @inject IMetricsService MetricsService
 @inject IOptions<AzureSettings> AzureSettings
 @inject NavigationManager Navigation
+@inject DashboardState DashboardState
 
 <PageTitle>FuncPulse - Dashboard</PageTitle>
 
@@ -74,6 +76,16 @@
             </div>
         </div>
     </div>
+
+    @if (showRefreshPrompt && !isLoading && string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-secondary d-flex justify-content-between align-items-center" role="alert">
+            <span>Showing the last loaded functions for <strong>@resourceGroup</strong>. Refresh when you're ready to pull the latest data.</span>
+            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="RefreshDataAsync">
+                Refresh Functions
+            </button>
+        </div>
+    }
 
     @if (isLoading)
     {
@@ -234,6 +246,8 @@
     private string? errorMessage;
     private string loadingMessage = "Loading Function Apps...";
     private string loadingSubMessage = "Connecting to Azure and discovering functions";
+    private bool restoredFromState;
+    private bool showRefreshPrompt;
     
     private List<string> availableResourceGroups = new();
     
@@ -250,6 +264,17 @@
     {
         subscriptionId = AzureSettings.Value.SubscriptionId;
         resourceGroup = AzureSettings.Value.ResourceGroup;
+
+        if (DashboardState.TryRestore(subscriptionId, out var snapshot))
+        {
+            resourceGroup = snapshot.ResourceGroup;
+            selectedTimeRange = snapshot.SelectedTimeRange;
+            availableResourceGroups = snapshot.AvailableResourceGroups.ToList();
+            functionApps = snapshot.FunctionApps.ToList();
+            restoredFromState = true;
+            showRefreshPrompt = snapshot.ShouldPromptForRefresh;
+            isLoading = false;
+        }
         
         // Don't load data here - it blocks the first render
         // Data loading moved to OnAfterRenderAsync
@@ -275,6 +300,12 @@
             }
             else if (!string.IsNullOrEmpty(subscriptionId))
             {
+                if (restoredFromState)
+                {
+                    await LoadResourceGroupsAsync(showLoadingState: false);
+                    return;
+                }
+
                 // Always load resource groups for dropdown
                 await LoadResourceGroupsAsync();
                 
@@ -297,6 +328,8 @@
     {
         isLoading = true;
         errorMessage = null;
+        showRefreshPrompt = false;
+        DashboardState.ClearRefreshPrompt();
         loadingMessage = "Loading Function Apps...";
         loadingSubMessage = "Connecting to Azure and discovering functions";
         StateHasChanged();
@@ -360,13 +393,21 @@
         }
     }
 
-    private async Task LoadResourceGroupsAsync()
+    private async Task LoadResourceGroupsAsync(bool showLoadingState = true)
     {
-        isLoading = true;
-        loadingMessage = "Loading Resource Groups...";
-        loadingSubMessage = "Connecting to Azure and discovering resource groups";
+        if (showLoadingState)
+        {
+            isLoading = true;
+            loadingMessage = "Loading Resource Groups...";
+            loadingSubMessage = "Connecting to Azure and discovering resource groups";
+        }
+
         errorMessage = null;
-        StateHasChanged();
+        
+        if (showLoadingState)
+        {
+            StateHasChanged();
+        }
 
         var timeoutSeconds = AzureSettings.Value.OperationTimeoutSeconds;
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
@@ -381,8 +422,11 @@
         }
         finally
         {
-            isLoading = false;
-            StateHasChanged();
+            if (showLoadingState)
+            {
+                isLoading = false;
+                StateHasChanged();
+            }
         }
     }
 
@@ -393,13 +437,21 @@
             return;
 
         resourceGroup = newResourceGroup;
+        showRefreshPrompt = false;
+        DashboardState.ClearRefreshPrompt();
         functionApps.Clear(); // Clear old data
         await LoadDataAsync();
     }
 
     private void ViewFunctionDetails(FunctionAppInfo app, FunctionInfo function)
     {
-        Navigation.NavigateTo($"/function/{Uri.EscapeDataString(app.Name)}/{Uri.EscapeDataString(function.Name)}");
+        DashboardState.Capture(subscriptionId, resourceGroup, selectedTimeRange, availableResourceGroups, functionApps);
+        Navigation.NavigateTo(FunctionDetailsNavigation.BuildUri(app, function));
+    }
+
+    private Task RefreshDataAsync()
+    {
+        return LoadDataAsync();
     }
 
     private static string GetShortFunctionName(string fullName)
