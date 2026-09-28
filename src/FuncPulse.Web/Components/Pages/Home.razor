@@ -10,6 +10,8 @@
 @inject IOptions<AzureSettings> AzureSettings
 @inject NavigationManager Navigation
 @inject DashboardState DashboardState
+@inject IFunctionManagementService ManagementService
+@inject ILogger<Home> Logger
 
 <PageTitle>FuncPulse - Dashboard</PageTitle>
 
@@ -76,7 +78,7 @@
                 }
             </div>
         </div>
-        <div class="col-md-6">
+        <div class="col-md-3">
             <label class="form-label">Time Display</label>
             <div class="btn-group" role="group">
                 <button type="button" 
@@ -90,6 +92,14 @@
                     UTC
                 </button>
             </div>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button type="button" 
+                    class="btn btn-outline-primary ms-auto"
+                    @onclick="RefreshDataAsync"
+                    disabled="@isLoading">
+                <i class="bi bi-arrow-clockwise"></i> Refresh Dashboard
+            </button>
         </div>
     </div>
 
@@ -174,8 +184,89 @@
         @foreach (var app in functionApps)
         {
             <div class="card mb-3">
-                <div class="card-header">
-                    <h5>@app.Name <span class="badge bg-secondary">@app.Location</span></h5>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0">
+                            @app.Name 
+                            <span class="badge bg-secondary">@app.Location</span>
+                            @if (appStates.TryGetValue(app.ResourceId, out var state))
+                            {
+                                <span class="badge @GetStateBadgeClass(state)">@state</span>
+                            }
+                        </h5>
+                    </div>
+                    <div class="btn-group" role="group">
+                        @if (canManageApps)
+                        {
+                            @if (appStates.TryGetValue(app.ResourceId, out var appState))
+                            {
+                                @if (appState == FunctionAppState.Running)
+                                {
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-warning"
+                                            @onclick="() => RestartAppAsync(app)"
+                                            disabled="@(isManaging.Contains(app.ResourceId))">
+                                        @if (isManaging.Contains(app.ResourceId))
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-arrow-clockwise me-1"></i>
+                                        }
+                                        Restart
+                                    </button>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => StopAppAsync(app)"
+                                            disabled="@(isManaging.Contains(app.ResourceId))">
+                                        @if (isManaging.Contains(app.ResourceId))
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-stop-circle me-1"></i>
+                                        }
+                                        Stop
+                                    </button>
+                                }
+                                else if (appState == FunctionAppState.Stopped)
+                                {
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-success"
+                                            @onclick="() => StartAppAsync(app)"
+                                            disabled="@(isManaging.Contains(app.ResourceId))">
+                                        @if (isManaging.Contains(app.ResourceId))
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-play-circle me-1"></i>
+                                        }
+                                        Start
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled>
+                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        @appState
+                                    </button>
+                                }
+                            }
+                        }
+                        else if (!AzureSettings.Value.DemoMode)
+                        {
+                            <button type="button" 
+                                    class="btn btn-sm btn-outline-secondary" 
+                                    disabled
+                                    title="Insufficient permissions to manage function apps">
+                                <i class="bi bi-lock"></i> Management Disabled
+                            </button>
+                        }
+                    </div>
                 </div>
                 <div class="card-body">
                     @if (app.Functions.Count == 0)
@@ -264,6 +355,10 @@
     private string loadingSubMessage = "Connecting to Azure and discovering functions";
     private bool restoredFromState;
     private bool showRefreshPrompt;
+    private bool canManageApps = false;
+    private Dictionary<string, FunctionAppState> appStates = new();
+    private HashSet<string> isManaging = new();
+    private string? managementErrorMessage;
     
     private List<string> availableResourceGroups = new();
     
@@ -288,7 +383,7 @@
             availableResourceGroups = snapshot.AvailableResourceGroups.ToList();
             functionApps = snapshot.FunctionApps.ToList();
             restoredFromState = true;
-            showRefreshPrompt = snapshot.ShouldPromptForRefresh;
+            showRefreshPrompt = false;
             isLoading = false;
         }
         
@@ -319,6 +414,12 @@
                 if (restoredFromState)
                 {
                     await LoadResourceGroupsAsync(showLoadingState: false);
+                    await CheckManagementPermissionsAsync();
+                    if (canManageApps)
+                    {
+                        await LoadAppStatesAsync();
+                    }
+                    StateHasChanged();
                     return;
                 }
 
@@ -391,6 +492,13 @@
                         function.Metrics = new FunctionMetrics(); // zeros
                     }
                 }
+            }
+            
+            // Check management permissions and load app states
+            await CheckManagementPermissionsAsync();
+            if (canManageApps)
+            {
+                await LoadAppStatesAsync();
             }
         }
         catch (OperationCanceledException)
@@ -482,6 +590,112 @@
         var lastSlashIndex = fullName.LastIndexOf('/');
         return lastSlashIndex >= 0 ? fullName.Substring(lastSlashIndex + 1) : fullName;
     }
+
+    private async Task CheckManagementPermissionsAsync()
+    {
+        if (string.IsNullOrEmpty(subscriptionId) || string.IsNullOrEmpty(resourceGroup))
+        {
+            canManageApps = false;
+            return;
+        }
+
+        try
+        {
+            canManageApps = await ManagementService.CanManageAsync(subscriptionId, resourceGroup);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to check management permissions");
+            canManageApps = false;
+        }
+    }
+
+    private async Task LoadAppStatesAsync()
+    {
+        if (!canManageApps)
+        {
+            return;
+        }
+
+        var tasks = functionApps.Select(async app =>
+        {
+            try
+            {
+                var state = await ManagementService.GetStateAsync(app.ResourceId);
+                appStates[app.ResourceId] = state;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to get state for app {AppName}", app.Name);
+                appStates[app.ResourceId] = FunctionAppState.Unknown;
+            }
+        });
+
+        await Task.WhenAll(tasks);
+    }
+
+    private async Task StartAppAsync(FunctionAppInfo app)
+    {
+        await ManageAppLifecycleAsync(app, async () =>
+        {
+            await ManagementService.StartAsync(app.ResourceId);
+            appStates[app.ResourceId] = FunctionAppState.Running;
+        }, "start");
+    }
+
+    private async Task StopAppAsync(FunctionAppInfo app)
+    {
+        await ManageAppLifecycleAsync(app, async () =>
+        {
+            await ManagementService.StopAsync(app.ResourceId);
+            appStates[app.ResourceId] = FunctionAppState.Stopped;
+        }, "stop");
+    }
+
+    private async Task RestartAppAsync(FunctionAppInfo app)
+    {
+        await ManageAppLifecycleAsync(app, async () =>
+        {
+            await ManagementService.RestartAsync(app.ResourceId);
+            appStates[app.ResourceId] = FunctionAppState.Running;
+        }, "restart");
+    }
+
+    private async Task ManageAppLifecycleAsync(FunctionAppInfo app, Func<Task> action, string operationName)
+    {
+        isManaging.Add(app.ResourceId);
+        managementErrorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            await action();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            managementErrorMessage = $"Permission denied: {ex.Message}";
+            errorMessage = managementErrorMessage;
+        }
+        catch (Exception ex)
+        {
+            managementErrorMessage = $"Failed to {operationName} {app.Name}: {ex.Message}";
+            errorMessage = managementErrorMessage;
+        }
+        finally
+        {
+            isManaging.Remove(app.ResourceId);
+            StateHasChanged();
+        }
+    }
+
+    private static string GetStateBadgeClass(FunctionAppState state) => state switch
+    {
+        FunctionAppState.Running => "bg-success",
+        FunctionAppState.Stopped => "bg-secondary",
+        FunctionAppState.Starting => "bg-info",
+        FunctionAppState.Stopping => "bg-warning",
+        _ => "bg-light text-dark"
+    };
 }
 
 <style>

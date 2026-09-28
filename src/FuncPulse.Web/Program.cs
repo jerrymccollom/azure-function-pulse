@@ -46,6 +46,7 @@ if (azureSettings != null)
 builder.Services.AddSingleton<IFunctionDiscoveryService, FunctionDiscoveryService>();
 builder.Services.AddSingleton<IMetricsService, MetricsService>();
 builder.Services.AddSingleton<ILogsService, LogsService>();
+builder.Services.AddSingleton<IFunctionManagementService, FunctionManagementService>();
 builder.Services.AddScoped<DashboardState>();
 
 timestamp = DateTime.Now.ToString("HH:mm:ss");
