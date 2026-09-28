@@ -5,6 +5,7 @@ namespace FuncPulse.Web.Services;
 public static class FunctionDetailsNavigation
 {
     public const string AppInsightsResourceIdQueryParameter = "appInsightsResourceId";
+    public const string AppResourceIdQueryParameter = "appResourceId";
 
     public static string BuildUri(FunctionAppInfo app, FunctionInfo function)
     {
@@ -13,8 +14,20 @@ public static class FunctionDetailsNavigation
 
         var path = $"/function/{Uri.EscapeDataString(app.Name)}/{Uri.EscapeDataString(function.Name)}";
 
-        return string.IsNullOrWhiteSpace(app.AppInsightsResourceId)
-            ? path
-            : $"{path}?{AppInsightsResourceIdQueryParameter}={Uri.EscapeDataString(app.AppInsightsResourceId)}";
+        var queryParams = new List<string>();
+        
+        if (!string.IsNullOrWhiteSpace(app.AppInsightsResourceId))
+        {
+            queryParams.Add($"{AppInsightsResourceIdQueryParameter}={Uri.EscapeDataString(app.AppInsightsResourceId)}");
+        }
+        
+        if (!string.IsNullOrWhiteSpace(app.ResourceId))
+        {
+            queryParams.Add($"{AppResourceIdQueryParameter}={Uri.EscapeDataString(app.ResourceId)}");
+        }
+
+        return queryParams.Count > 0 
+            ? $"{path}?{string.Join("&", queryParams)}"
+            : path;
     }
 }
