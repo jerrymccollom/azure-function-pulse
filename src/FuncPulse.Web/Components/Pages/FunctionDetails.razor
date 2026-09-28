@@ -35,7 +35,7 @@
     </div>
 
     <div class="row mb-3">
-        <div class="col">
+        <div class="col-md-8">
             <label class="form-label">Time Range</label>
             <div class="btn-group" role="group">
                 @foreach (var range in Enum.GetValues<TimeRange>())
@@ -47,6 +47,14 @@
                     </button>
                 }
             </div>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <button type="button" 
+                    class="btn btn-outline-primary ms-auto"
+                    @onclick="RefreshDataAsync"
+                    disabled="@isLoading">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
         </div>
     </div>
 
@@ -317,6 +325,16 @@
             isLoading = false;
             StateHasChanged();
         }
+    }
+
+    private async Task RefreshDataAsync()
+    {
+        // Clear any selected invocation and logs when refreshing
+        selectedInvocation = null;
+        invocationLog = null;
+        logsUnavailableMessage = null;
+        
+        await LoadInvocationsAsync();
     }
 
     private async Task ViewLogs(FunctionInvocation invocation)
