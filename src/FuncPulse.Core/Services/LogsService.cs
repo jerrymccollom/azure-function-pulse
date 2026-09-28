@@ -140,7 +140,7 @@ public class LogsService : ILogsService
                     | project
                         timestamp,
                         itemType,
-                        severityLevel = iff(isnull(severityLevel), 3, severityLevel),
+                        severityLevel = 3,
                         message = coalesce(outerMessage, innermostMessage, problemId, type),
                         exceptionType = coalesce(type, innermostType),
                         stackTrace = iff(array_length(stackFrames) > 0, strcat_array(stackFrames, '\n'), iff(isnotempty(innermostMethod), strcat('at ', innermostMethod), ''))
