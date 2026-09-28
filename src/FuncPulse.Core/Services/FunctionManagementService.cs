@@ -237,4 +237,153 @@ public class FunctionManagementService : IFunctionManagementService
             return false;
         }
     }
+
+    public async Task<bool> EnableFunctionAsync(string appResourceId, string functionName, CancellationToken cancellationToken = default)
+    {
+        if (_settings.DemoMode)
+        {
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] FunctionManagementService: DEMO MODE - Simulating enable function");
+            await Task.Delay(500, cancellationToken);
+            return true;
+        }
+
+        if (_armClient == null)
+        {
+            return false;
+        }
+
+        var timestamp2 = DateTime.Now.ToString("HH:mm:ss");
+        var shortName = GetShortFunctionName(functionName);
+        Console.WriteLine($"[{timestamp2}] FunctionManagementService: Enabling function '{shortName}' in {appResourceId[..Math.Min(60, appResourceId.Length)]}...");
+
+        try
+        {
+            var webSiteResource = _armClient.GetWebSiteResource(new ResourceIdentifier(appResourceId));
+            var appSettings = await webSiteResource.GetApplicationSettingsAsync(cancellationToken);
+            var settings = appSettings.Value.Properties;
+
+            var disableKey = $"AzureWebJobs.{shortName}.Disabled";
+            
+            if (settings.ContainsKey(disableKey))
+            {
+                settings.Remove(disableKey);
+                await webSiteResource.UpdateApplicationSettingsAsync(appSettings.Value, cancellationToken);
+                
+                Console.WriteLine($"[{timestamp2}] FunctionManagementService: Function enabled successfully");
+                return true;
+            }
+            else
+            {
+                Console.WriteLine($"[{timestamp2}] FunctionManagementService: Function was already enabled");
+                return true;
+            }
+        }
+        catch (RequestFailedException ex) when (ex.Status == 403)
+        {
+            Console.WriteLine($"[{timestamp2}] FunctionManagementService: PERMISSION DENIED - Insufficient permissions to enable function");
+            _logger.LogWarning(ex, "Permission denied when enabling function {FunctionName}", functionName);
+            throw new UnauthorizedAccessException("Insufficient permissions to enable the function. Ensure you have 'Microsoft.Web/sites/config/write' permission.", ex);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[{timestamp2}] FunctionManagementService: ERROR enabling function - {ex.Message}");
+            _logger.LogError(ex, "Failed to enable function {FunctionName}", functionName);
+            throw;
+        }
+    }
+
+    public async Task<bool> DisableFunctionAsync(string appResourceId, string functionName, CancellationToken cancellationToken = default)
+    {
+        if (_settings.DemoMode)
+        {
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] FunctionManagementService: DEMO MODE - Simulating disable function");
+            await Task.Delay(500, cancellationToken);
+            return true;
+        }
+
+        if (_armClient == null)
+        {
+            return false;
+        }
+
+        var timestamp2 = DateTime.Now.ToString("HH:mm:ss");
+        var shortName = GetShortFunctionName(functionName);
+        Console.WriteLine($"[{timestamp2}] FunctionManagementService: Disabling function '{shortName}' in {appResourceId[..Math.Min(60, appResourceId.Length)]}...");
+
+        try
+        {
+            var webSiteResource = _armClient.GetWebSiteResource(new ResourceIdentifier(appResourceId));
+            var appSettings = await webSiteResource.GetApplicationSettingsAsync(cancellationToken);
+            var settings = appSettings.Value.Properties;
+
+            var disableKey = $"AzureWebJobs.{shortName}.Disabled";
+            settings[disableKey] = "true";
+            
+            await webSiteResource.UpdateApplicationSettingsAsync(appSettings.Value, cancellationToken);
+            
+            Console.WriteLine($"[{timestamp2}] FunctionManagementService: Function disabled successfully");
+            return true;
+        }
+        catch (RequestFailedException ex) when (ex.Status == 403)
+        {
+            Console.WriteLine($"[{timestamp2}] FunctionManagementService: PERMISSION DENIED - Insufficient permissions to disable function");
+            _logger.LogWarning(ex, "Permission denied when disabling function {FunctionName}", functionName);
+            throw new UnauthorizedAccessException("Insufficient permissions to disable the function. Ensure you have 'Microsoft.Web/sites/config/write' permission.", ex);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[{timestamp2}] FunctionManagementService: ERROR disabling function - {ex.Message}");
+            _logger.LogError(ex, "Failed to disable function {FunctionName}", functionName);
+            throw;
+        }
+    }
+
+    public async Task<bool> IsFunctionEnabledAsync(string appResourceId, string functionName, CancellationToken cancellationToken = default)
+    {
+        if (_settings.DemoMode)
+        {
+            return true;
+        }
+
+        if (_armClient == null)
+        {
+            return true;
+        }
+
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        var shortName = GetShortFunctionName(functionName);
+
+        try
+        {
+            var webSiteResource = _armClient.GetWebSiteResource(new ResourceIdentifier(appResourceId));
+            var appSettings = await webSiteResource.GetApplicationSettingsAsync(cancellationToken);
+            var settings = appSettings.Value.Properties;
+
+            var disableKey = $"AzureWebJobs.{shortName}.Disabled";
+            
+            if (settings.TryGetValue(disableKey, out var value))
+            {
+                var isDisabled = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) || value == "1";
+                Console.WriteLine($"[{timestamp}] FunctionManagementService: Function '{shortName}' is {(isDisabled ? "disabled" : "enabled")}");
+                return !isDisabled;
+            }
+            
+            Console.WriteLine($"[{timestamp}] FunctionManagementService: Function '{shortName}' has no disable setting - assumed enabled");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[{timestamp}] FunctionManagementService: ERROR checking function status - {ex.Message}");
+            _logger.LogWarning(ex, "Failed to check function status for {FunctionName}", functionName);
+            return true;
+        }
+    }
+
+    private string GetShortFunctionName(string fullName)
+    {
+        var lastSlashIndex = fullName.LastIndexOf('/');
+        return lastSlashIndex >= 0 ? fullName.Substring(lastSlashIndex + 1) : fullName;
+    }
 }
