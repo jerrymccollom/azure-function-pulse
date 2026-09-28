@@ -368,10 +368,37 @@ public class MetricsService : IMetricsService
             _ => 50
         };
 
+        bool latestShouldSucceed = true;
+        int failureThreshold = 5;
+
+        if (functionName.Contains("Payment"))
+        {
+            latestShouldSucceed = false;
+            failureThreshold = 8;
+        }
+        else if (functionName.Contains("Sync"))
+        {
+            latestShouldSucceed = true;
+            failureThreshold = 2;
+        }
+
         for (int i = 0; i < count; i++)
         {
-            var timestamp = now - TimeSpan.FromMinutes(random.Next(0, (int)timeRange.ToTimeSpan().TotalMinutes));
-            var success = random.Next(0, 100) >= 5;
+            var timestamp = now - TimeSpan.FromMinutes(i * 5);
+            bool success;
+            
+            if (i == 0)
+            {
+                success = latestShouldSucceed;
+            }
+            else if (i < 15 && functionName.Contains("Order"))
+            {
+                success = random.Next(0, 100) >= 10;
+            }
+            else
+            {
+                success = random.Next(0, 100) >= failureThreshold;
+            }
             
             invocations.Add(new FunctionInvocation
             {

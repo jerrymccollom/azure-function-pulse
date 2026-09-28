@@ -276,7 +276,9 @@
                                     @foreach (var function in app.Functions)
                                     {
                                         var metrics = function.Metrics;
-                                        var status = metrics?.GetHealthStatus() ?? HealthStatus.Unknown;
+                                        var status = (metrics != null && function.RecentInvocations.Count > 0)
+                                            ? metrics.GetHealthStatus(function.RecentInvocations)
+                                            : (metrics?.GetHealthStatus() ?? HealthStatus.Unknown);
                                         var statusClass = status switch
                                         {
                                             HealthStatus.Healthy => "success",
@@ -329,10 +331,17 @@
     
     private int totalFunctions => functionApps.Sum(a => a.Functions.Count);
     private int healthyCount => functionApps.SelectMany(a => a.Functions)
-        .Count(f => f.Metrics?.GetHealthStatus() == HealthStatus.Healthy);
+        .Count(f => {
+            var status = (f.Metrics != null && f.RecentInvocations.Count > 0)
+                ? f.Metrics.GetHealthStatus(f.RecentInvocations)
+                : (f.Metrics?.GetHealthStatus() ?? HealthStatus.Unknown);
+            return status == HealthStatus.Healthy;
+        });
     private int unhealthyCount => functionApps.SelectMany(a => a.Functions)
         .Count(f => {
-            var status = f.Metrics?.GetHealthStatus();
+            var status = (f.Metrics != null && f.RecentInvocations.Count > 0)
+                ? f.Metrics.GetHealthStatus(f.RecentInvocations)
+                : (f.Metrics?.GetHealthStatus() ?? HealthStatus.Unknown);
             return status == HealthStatus.Warning || status == HealthStatus.Critical;
         });
 
@@ -444,7 +453,7 @@
                 // Get all metrics for this app in one query
                 var appMetrics = await MetricsService.GetAppMetricsAsync(app, selectedTimeRange, cts.Token);
                 
-                // Map metrics to functions by short name
+                // Map metrics to functions by short name and load recent invocations
                 foreach (var function in app.Functions)
                 {
                     var shortName = GetShortFunctionName(function.Name);
@@ -455,6 +464,22 @@
                     else
                     {
                         function.Metrics = new FunctionMetrics(); // zeros
+                    }
+
+                    // Load recent invocations (limit to 20 for health check)
+                    try
+                    {
+                        var invocations = await MetricsService.GetInvocationsAsync(
+                            app.AppInsightsResourceId ?? string.Empty,
+                            function.Name,
+                            selectedTimeRange,
+                            cts.Token);
+                        function.RecentInvocations = invocations.Take(20).ToList();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogWarning(ex, "Failed to load invocations for {FunctionName}", function.Name);
+                        function.RecentInvocations = new List<FunctionInvocation>();
                     }
                 }
             }
