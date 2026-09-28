@@ -28,62 +28,45 @@
         </div>
     </div>
 
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-body">
-                    <h6 class="card-subtitle mb-2 text-muted">Subscription</h6>
-                    <p class="card-text">@(string.IsNullOrEmpty(subscriptionId) ? "Not configured" : subscriptionId)</p>
-                </div>
-            </div>
+    <div class="row mb-3 align-items-center">
+        <div class="col-auto">
+            <strong>Subscription:</strong>
         </div>
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-body">
-                    <h6 class="card-subtitle mb-2 text-muted">Resource Group</h6>
-                    @if (!AzureSettings.Value.DemoMode && !string.IsNullOrEmpty(subscriptionId) && availableResourceGroups.Count > 0)
-                    {
-                        <select class="form-select" @onchange="OnResourceGroupChanged" value="@resourceGroup">
-                            <option value="">-- Select Resource Group --</option>
-                            @foreach (var rg in availableResourceGroups)
-                            {
-                                <option value="@rg" selected="@(rg == resourceGroup)">@rg</option>
-                            }
-                        </select>
-                        @if (string.IsNullOrEmpty(resourceGroup))
-                        {
-                            <small class="text-muted d-block mt-2">Choose a resource group from the dropdown to load its functions.</small>
-                        }
-                    }
-                    else
-                    {
-                        <p class="card-text">@(string.IsNullOrEmpty(resourceGroup) ? "Not configured" : resourceGroup)</p>
-                    }
-                </div>
-            </div>
+        <div class="col-auto">
+            <span class="text-muted">@(string.IsNullOrEmpty(subscriptionId) ? "Not configured" : subscriptionId)</span>
         </div>
-    </div>
-
-    <div class="row mb-3">
-        <div class="col-12 d-flex justify-content-end">
+        <div class="col-auto">
+            <strong>Resource Group:</strong>
+        </div>
+        <div class="col-auto">
+            @if (!AzureSettings.Value.DemoMode && !string.IsNullOrEmpty(subscriptionId) && availableResourceGroups.Count > 0)
+            {
+                <select class="form-select form-select-sm" style="max-width: 300px;" @onchange="OnResourceGroupChanged" value="@resourceGroup">
+                    <option value="">-- Select Resource Group --</option>
+                    @foreach (var rg in availableResourceGroups)
+                    {
+                        <option value="@rg" selected="@(rg == resourceGroup)">@rg</option>
+                    }
+                </select>
+                @if (string.IsNullOrEmpty(resourceGroup))
+                {
+                    <small class="text-muted d-block mt-1">Choose a resource group to load its functions.</small>
+                }
+            }
+            else
+            {
+                <span class="text-muted">@(string.IsNullOrEmpty(resourceGroup) ? "Not configured" : resourceGroup)</span>
+            }
+        </div>
+        <div class="col-auto ms-auto">
             <button type="button" 
-                    class="btn btn-outline-primary"
+                    class="btn btn-sm btn-outline-primary"
                     @onclick="RefreshDataAsync"
                     disabled="@isLoading">
                 <i class="bi bi-arrow-clockwise"></i> Refresh Dashboard
             </button>
         </div>
     </div>
-
-    @if (showRefreshPrompt && !isLoading && string.IsNullOrEmpty(errorMessage))
-    {
-        <div class="alert alert-secondary d-flex justify-content-between align-items-center" role="alert">
-            <span>Showing the last loaded functions for <strong>@resourceGroup</strong>. Refresh when you're ready to pull the latest data.</span>
-            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="RefreshDataAsync">
-                Refresh Functions
-            </button>
-        </div>
-    }
 
     @if (isLoading)
     {
