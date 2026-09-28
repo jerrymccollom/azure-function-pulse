@@ -33,6 +33,37 @@ public class FunctionMetrics
         if (FailureRate < 5) return HealthStatus.Warning;
         return HealthStatus.Critical;
     }
+
+    public HealthStatus GetHealthStatus(List<FunctionInvocation> recentInvocations)
+    {
+        if (recentInvocations == null || recentInvocations.Count == 0)
+        {
+            return HealthStatus.Unknown;
+        }
+
+        var latestInvocation = recentInvocations
+            .OrderByDescending(i => i.Timestamp)
+            .FirstOrDefault();
+
+        if (latestInvocation == null)
+        {
+            return HealthStatus.Unknown;
+        }
+
+        if (!latestInvocation.Success)
+        {
+            return HealthStatus.Critical;
+        }
+
+        var last20 = recentInvocations
+            .OrderByDescending(i => i.Timestamp)
+            .Take(20)
+            .ToList();
+
+        var hasFailuresInRecent = last20.Any(i => !i.Success);
+
+        return hasFailuresInRecent ? HealthStatus.Warning : HealthStatus.Healthy;
+    }
 }
 
 public class MetricDataPoint
