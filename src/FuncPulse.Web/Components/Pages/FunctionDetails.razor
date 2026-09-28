@@ -3,9 +3,11 @@
 @using FuncPulse.Core.Models
 @using FuncPulse.Core.Services
 @using FuncPulse.Web.Services
+@using static FuncPulse.Web.Services.TimeDisplayMode
 @inject IMetricsService MetricsService
 @inject ILogsService LogsService
 @inject NavigationManager Navigation
+@inject DashboardState DashboardState
 
 <PageTitle>@FunctionName - FuncPulse</PageTitle>
 
@@ -35,7 +37,7 @@
     </div>
 
     <div class="row mb-3">
-        <div class="col-md-8">
+        <div class="col-md-6">
             <label class="form-label">Time Range</label>
             <div class="btn-group" role="group">
                 @foreach (var range in Enum.GetValues<TimeRange>())
@@ -48,7 +50,22 @@
                 }
             </div>
         </div>
-        <div class="col-md-4 d-flex align-items-end">
+        <div class="col-md-3">
+            <label class="form-label">Time Display</label>
+            <div class="btn-group" role="group">
+                <button type="button" 
+                        class="btn @(DashboardState.TimeDisplayMode == TimeDisplayMode.Local ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="() => SetTimeDisplayMode(TimeDisplayMode.Local)">
+                    Local
+                </button>
+                <button type="button" 
+                        class="btn @(DashboardState.TimeDisplayMode == TimeDisplayMode.Utc ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="() => SetTimeDisplayMode(TimeDisplayMode.Utc)">
+                    UTC
+                </button>
+            </div>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
             <button type="button" 
                     class="btn btn-outline-primary ms-auto"
                     @onclick="RefreshDataAsync"
@@ -96,7 +113,7 @@
                                     @foreach (var invocation in invocations.Take(100))
                                     {
                                         <tr class="@(selectedInvocation?.OperationId == invocation.OperationId ? "table-active" : null)">
-                                            <td>@invocation.Timestamp.ToString("yyyy-MM-dd HH:mm:ss") UTC</td>
+                                            <td>@DashboardState.FormatDateTime(invocation.Timestamp) @DashboardState.GetTimeZoneLabel()</td>
                                             <td>
                                                 @if (invocation.Success)
                                                 {
@@ -141,7 +158,7 @@
                                 <dd class="col-sm-9"><code>@selectedInvocation.OperationId</code></dd>
                                 
                                 <dt class="col-sm-3">Timestamp</dt>
-                                <dd class="col-sm-9">@selectedInvocation.Timestamp.ToString("yyyy-MM-dd HH:mm:ss") UTC</dd>
+                                <dd class="col-sm-9">@DashboardState.FormatDateTime(selectedInvocation.Timestamp) @DashboardState.GetTimeZoneLabel()</dd>
                                 
                                 <dt class="col-sm-3">Duration</dt>
                                 <dd class="col-sm-9">@selectedInvocation.Duration.TotalMilliseconds.ToString("F0") ms</dd>
@@ -169,7 +186,7 @@
                                     @foreach (var entry in invocationLog.Entries)
                                     {
                                         <div class="log-entry log-level-@entry.Level.ToLower()">
-                                            <span class="log-timestamp">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                                            <span class="log-timestamp">@DashboardState.FormatDateTime(entry.Timestamp, "HH:mm:ss.fff")</span>
                                             <span class="badge bg-@GetLogLevelBadgeClass(entry.Level)">@entry.Level</span>
                                             <span class="log-message">@entry.Message</span>
                                             
@@ -301,6 +318,12 @@
         selectedInvocation = null;
         invocationLog = null;
         await LoadInvocationsAsync();
+    }
+
+    private void SetTimeDisplayMode(TimeDisplayMode mode)
+    {
+        DashboardState.TimeDisplayMode = mode;
+        StateHasChanged();
     }
 
     private async Task LoadInvocationsAsync()
