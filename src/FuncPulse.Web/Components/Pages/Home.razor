@@ -65,37 +65,9 @@
     </div>
 
     <div class="row mb-3">
-        <div class="col-md-6">
-            <label class="form-label">Time Range</label>
-            <div class="btn-group" role="group">
-                @foreach (var range in Enum.GetValues<TimeRange>())
-                {
-                    <button type="button" 
-                            class="btn @(selectedTimeRange == range ? "btn-primary" : "btn-outline-primary")"
-                            @onclick="() => SelectTimeRange(range)">
-                        @range.ToDisplayString()
-                    </button>
-                }
-            </div>
-        </div>
-        <div class="col-md-3">
-            <label class="form-label">Time Display</label>
-            <div class="btn-group" role="group">
-                <button type="button" 
-                        class="btn @(DashboardState.TimeDisplayMode == TimeDisplayMode.Local ? "btn-primary" : "btn-outline-primary")"
-                        @onclick="() => SetTimeDisplayMode(TimeDisplayMode.Local)">
-                    Local
-                </button>
-                <button type="button" 
-                        class="btn @(DashboardState.TimeDisplayMode == TimeDisplayMode.Utc ? "btn-primary" : "btn-outline-primary")"
-                        @onclick="() => SetTimeDisplayMode(TimeDisplayMode.Utc)">
-                    UTC
-                </button>
-            </div>
-        </div>
-        <div class="col-md-3 d-flex align-items-end">
+        <div class="col-12 d-flex justify-content-end">
             <button type="button" 
-                    class="btn btn-outline-primary ms-auto"
+                    class="btn btn-outline-primary"
                     @onclick="RefreshDataAsync"
                     disabled="@isLoading">
                 <i class="bi bi-arrow-clockwise"></i> Refresh Dashboard
@@ -275,6 +247,19 @@
                     }
                     else
                     {
+                        <div class="mb-3">
+                            <label class="form-label">Time Range</label>
+                            <div class="btn-group" role="group">
+                                @foreach (var range in Enum.GetValues<TimeRange>())
+                                {
+                                    <button type="button" 
+                                            class="btn btn-sm @(selectedTimeRange == range ? "btn-primary" : "btn-outline-primary")"
+                                            @onclick="() => SelectTimeRange(range)">
+                                        @range.ToDisplayString()
+                                    </button>
+                                }
+                            </div>
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-hover">
                                 <thead>
