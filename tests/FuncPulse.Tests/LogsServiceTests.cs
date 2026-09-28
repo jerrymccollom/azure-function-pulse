@@ -16,6 +16,7 @@ public class LogsServiceTests
         Assert.Contains("extend stackFrames = extract_all", query);
         Assert.Contains("stackTrace = iff(array_length(stackFrames) > 0", query);
         Assert.Contains("| where isnotempty(message)", query);
+        Assert.Contains("| summarize arg_max(timestamp, severityLevel, exceptionType, stackTrace) by message, itemType", query);
     }
 
     [Fact]

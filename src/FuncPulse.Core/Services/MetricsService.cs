@@ -210,6 +210,9 @@ public class MetricsService : IMetricsService
                 requests
                 | where timestamp >= ago({FormatTimeSpan(timeSpan)})
                 | where name == '{shortName}'
+                | summarize 
+                    arg_max(timestamp, duration, success, resultCode, customDimensions)
+                    by operation_Id
                 | project 
                     operation_Id, 
                     timestamp, 

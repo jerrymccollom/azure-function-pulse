@@ -66,19 +66,6 @@
 
     <div class="row mb-3">
         <div class="col-md-6">
-            <label class="form-label">Time Range</label>
-            <div class="btn-group" role="group">
-                @foreach (var range in Enum.GetValues<TimeRange>())
-                {
-                    <button type="button" 
-                            class="btn @(selectedTimeRange == range ? "btn-primary" : "btn-outline-primary")"
-                            @onclick="() => SelectTimeRange(range)">
-                        @range.ToDisplayString()
-                    </button>
-                }
-            </div>
-        </div>
-        <div class="col-md-3">
             <label class="form-label">Time Display</label>
             <div class="btn-group" role="group">
                 <button type="button" 
@@ -93,7 +80,7 @@
                 </button>
             </div>
         </div>
-        <div class="col-md-3 d-flex align-items-end">
+        <div class="col-md-6 d-flex align-items-end">
             <button type="button" 
                     class="btn btn-outline-primary ms-auto"
                     @onclick="RefreshDataAsync"
@@ -371,15 +358,6 @@
         {
             await CheckFunctionManagementPermissionsAsync();
         }
-    }
-
-    private async Task SelectTimeRange(TimeRange range)
-    {
-        selectedTimeRange = range;
-        selectedInvocation = null;
-        invocationLog = null;
-        currentPage = 1;
-        await LoadInvocationsAsync();
     }
 
     private void SetTimeDisplayMode(TimeDisplayMode mode)
