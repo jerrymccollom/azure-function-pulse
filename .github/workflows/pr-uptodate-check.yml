@@ -1,0 +1,51 @@
+name: PR Up-to-Date Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-uptodate:
+    name: up-to-date-with-main
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      
+      - name: Fetch main branch
+        run: |
+          git fetch origin main:main
+      
+      - name: Check if PR is up to date with main
+        id: uptodate-check
+        run: |
+          MAIN_SHA=$(git rev-parse main)
+          MERGE_BASE=$(git merge-base HEAD main)
+          
+          echo "Main branch SHA: $MAIN_SHA"
+          echo "Merge base SHA: $MERGE_BASE"
+          echo "PR HEAD SHA: ${{ github.event.pull_request.head.sha }}"
+          
+          if [ "$MERGE_BASE" = "$MAIN_SHA" ]; then
+            echo "✅ PR is up to date with main (merge-base equals main tip)"
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            COMMITS_BEHIND=$(git rev-list --count ${MERGE_BASE}..main)
+            echo "❌ PR is $COMMITS_BEHIND commit(s) behind main"
+            echo "status=behind" >> $GITHUB_OUTPUT
+            echo "commits_behind=$COMMITS_BEHIND" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+      
+      - name: Report status
+        if: always()
+        run: |
+          if [ "${{ steps.uptodate-check.outputs.status }}" = "behind" ]; then
+            echo "::error::This PR is ${{ steps.uptodate-check.outputs.commits_behind }} commit(s) behind main. Please rebase or merge main into your branch before merging."
+          fi
