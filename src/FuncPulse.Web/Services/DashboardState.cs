@@ -1,3 +1,4 @@
+using System.Globalization;
 using FuncPulse.Core.Models;
 
 namespace FuncPulse.Web.Services;
@@ -34,34 +35,30 @@ public sealed class DashboardState
 
     public string FormatDateTime(DateTime dateTime, string format = "yyyy-MM-dd HH:mm:ss")
     {
-        dateTime = NormalizeTimestamp(dateTime);
+        if (dateTime.Kind == DateTimeKind.Unspecified)
+        {
+            throw new ArgumentException("Timestamp kind must be Local or Utc.", nameof(dateTime));
+        }
 
         if (_timeDisplayMode == TimeDisplayMode.Local)
         {
             var localTime = dateTime.Kind == DateTimeKind.Utc 
                 ? dateTime.ToLocalTime() 
                 : dateTime;
-            return localTime.ToString(format);
+            return localTime.ToString(format, CultureInfo.InvariantCulture);
         }
         else
         {
             var utcTime = dateTime.Kind == DateTimeKind.Local 
                 ? dateTime.ToUniversalTime() 
                 : dateTime;
-            return utcTime.ToString(format);
+            return utcTime.ToString(format, CultureInfo.InvariantCulture);
         }
     }
 
     public string GetTimeZoneLabel()
     {
         return _timeDisplayMode == TimeDisplayMode.Local ? "Local" : "UTC";
-    }
-
-    private static DateTime NormalizeTimestamp(DateTime dateTime)
-    {
-        return dateTime.Kind == DateTimeKind.Unspecified
-            ? DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
-            : dateTime;
     }
 
     public void Capture(

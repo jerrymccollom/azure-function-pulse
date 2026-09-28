@@ -111,15 +111,12 @@ public class DashboardStateTests
     }
 
     [Fact]
-    public void FormatDateTime_TreatsUnspecifiedValuesAsUtc()
+    public void FormatDateTime_ThrowsForUnspecifiedValues()
     {
-        var state = new DashboardState
-        {
-            TimeDisplayMode = TimeDisplayMode.Utc
-        };
+        var state = new DashboardState();
 
-        var formatted = state.FormatDateTime(new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Unspecified));
+        var act = () => state.FormatDateTime(new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Unspecified));
 
-        Assert.Equal("2026-01-01 12:00:00", formatted);
+        Assert.Throws<ArgumentException>(act);
     }
 }
