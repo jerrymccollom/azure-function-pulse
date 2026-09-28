@@ -4,6 +4,7 @@
 @using FuncPulse.Core.Services
 @using FuncPulse.Web.Services
 @using Microsoft.Extensions.Options
+@using static FuncPulse.Web.Services.TimeDisplayMode
 @inject IFunctionDiscoveryService DiscoveryService
 @inject IMetricsService MetricsService
 @inject IOptions<AzureSettings> AzureSettings
@@ -64,7 +65,7 @@
     </div>
 
     <div class="row mb-3">
-        <div class="col-md-8">
+        <div class="col-md-6">
             <label class="form-label">Time Range</label>
             <div class="btn-group" role="group">
                 @foreach (var range in Enum.GetValues<TimeRange>())
@@ -77,7 +78,22 @@
                 }
             </div>
         </div>
-        <div class="col-md-4 d-flex align-items-end">
+        <div class="col-md-3">
+            <label class="form-label">Time Display</label>
+            <div class="btn-group" role="group">
+                <button type="button" 
+                        class="btn @(DashboardState.TimeDisplayMode == TimeDisplayMode.Local ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="() => SetTimeDisplayMode(TimeDisplayMode.Local)">
+                    Local
+                </button>
+                <button type="button" 
+                        class="btn @(DashboardState.TimeDisplayMode == TimeDisplayMode.Utc ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="() => SetTimeDisplayMode(TimeDisplayMode.Utc)">
+                    UTC
+                </button>
+            </div>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
             <button type="button" 
                     class="btn btn-outline-primary ms-auto"
                     @onclick="RefreshDataAsync"
@@ -367,7 +383,7 @@
             availableResourceGroups = snapshot.AvailableResourceGroups.ToList();
             functionApps = snapshot.FunctionApps.ToList();
             restoredFromState = true;
-            showRefreshPrompt = false;
+            showRefreshPrompt = snapshot.ShouldPromptForRefresh;
             isLoading = false;
         }
         
@@ -423,6 +439,12 @@
     {
         selectedTimeRange = range;
         await LoadDataAsync();
+    }
+
+    private void SetTimeDisplayMode(TimeDisplayMode mode)
+    {
+        DashboardState.TimeDisplayMode = mode;
+        StateHasChanged();
     }
 
     private async Task LoadDataAsync()

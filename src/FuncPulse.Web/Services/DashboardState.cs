@@ -2,9 +2,22 @@ using FuncPulse.Core.Models;
 
 namespace FuncPulse.Web.Services;
 
+public enum TimeDisplayMode
+{
+    Local,
+    Utc
+}
+
 public sealed class DashboardState
 {
     private DashboardSnapshot? _snapshot;
+    private TimeDisplayMode _timeDisplayMode = TimeDisplayMode.Local;
+
+    public TimeDisplayMode TimeDisplayMode
+    {
+        get => _timeDisplayMode;
+        set => _timeDisplayMode = value;
+    }
 
     public bool TryRestore(string subscriptionId, out DashboardSnapshot snapshot)
     {
@@ -17,6 +30,29 @@ public sealed class DashboardState
 
         snapshot = _snapshot;
         return true;
+    }
+
+    public string FormatDateTime(DateTime dateTime, string format = "yyyy-MM-dd HH:mm:ss")
+    {
+        if (_timeDisplayMode == TimeDisplayMode.Local)
+        {
+            var localTime = dateTime.Kind == DateTimeKind.Utc 
+                ? dateTime.ToLocalTime() 
+                : dateTime;
+            return localTime.ToString(format);
+        }
+        else
+        {
+            var utcTime = dateTime.Kind == DateTimeKind.Local 
+                ? dateTime.ToUniversalTime() 
+                : dateTime;
+            return utcTime.ToString(format);
+        }
+    }
+
+    public string GetTimeZoneLabel()
+    {
+        return _timeDisplayMode == TimeDisplayMode.Local ? "Local" : "UTC";
     }
 
     public void Capture(
