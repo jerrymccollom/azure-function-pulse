@@ -146,7 +146,7 @@ public class LogsService : ILogsService
                         stackTrace = iff(array_length(stackFrames) > 0, strcat_array(stackFrames, '\n'), iff(isnotempty(innermostMethod), strcat('at ', innermostMethod), ''))
                 )
                 | where isnotempty(message)
-                | summarize arg_max(timestamp, severityLevel, exceptionType, stackTrace) by message, itemType
+                | summarize arg_max(timestamp, *) by message, itemType
                 | project timestamp, itemType, severityLevel, message, exceptionType, stackTrace
                 | order by timestamp asc";
     }
