@@ -89,6 +89,13 @@ public class MetricsService : IMetricsService
         {
             var timeSpan = timeRange.ToTimeSpan();
             
+            // Build set of discovered function names to filter metrics
+            var discoveredFunctionNames = new HashSet<string>(
+                app.Functions.Select(f => GetShortFunctionName(f.Name)),
+                StringComparer.OrdinalIgnoreCase);
+            
+            Console.WriteLine($"[{timestamp2}] MetricsService: Limiting metrics to {discoveredFunctionNames.Count} discovered function(s)");
+            
             // Batch query: get all function metrics in one KQL query
             var query = $@"
                 requests
@@ -111,27 +118,49 @@ public class MetricsService : IMetricsService
             {
                 var table = response.Value.Table;
                 timestamp2 = DateTime.Now.ToString("HH:mm:ss");
-                Console.WriteLine($"[{timestamp2}] MetricsService: Retrieved {table.Rows.Count} function metric rows");
+                Console.WriteLine($"[{timestamp2}] MetricsService: Retrieved {table.Rows.Count} metric rows from Application Insights");
+                
+                var matchedCount = 0;
+                var skippedCount = 0;
                 
                 foreach (var row in table.Rows)
                 {
                     var functionName = row.GetString("name");
-                    var successCount = row.GetInt32("SuccessCount") ?? 0;
-                    var failureCount = row.GetInt32("FailureCount") ?? 0;
                     
                     if (!string.IsNullOrEmpty(functionName))
                     {
-                        result[functionName] = new FunctionMetrics
+                        // Only include metrics for discovered functions
+                        if (discoveredFunctionNames.Contains(functionName))
                         {
-                            SuccessCount = successCount,
-                            FailureCount = failureCount
-                        };
-                        Console.WriteLine($"[{timestamp2}] MetricsService:   - {functionName}: {successCount} success, {failureCount} failures");
+                            var successCount = row.GetInt32("SuccessCount") ?? 0;
+                            var failureCount = row.GetInt32("FailureCount") ?? 0;
+                            
+                            result[functionName] = new FunctionMetrics
+                            {
+                                SuccessCount = successCount,
+                                FailureCount = failureCount
+                            };
+                            Console.WriteLine($"[{timestamp2}] MetricsService:   - {functionName}: {successCount} success, {failureCount} failures");
+                            matchedCount++;
+                        }
+                        else
+                        {
+                            skippedCount++;
+                        }
                     }
                 }
+                
+                if (skippedCount > 0)
+                {
+                    timestamp2 = DateTime.Now.ToString("HH:mm:ss");
+                    Console.WriteLine($"[{timestamp2}] MetricsService: Skipped {skippedCount} non-function request(s) (HTTP routes, swagger, etc.)");
+                }
+                
+                timestamp2 = DateTime.Now.ToString("HH:mm:ss");
+                Console.WriteLine($"[{timestamp2}] MetricsService: Matched {matchedCount} discovered function(s) with metrics");
             }
             
-            // Ensure all functions have metrics (zeros if not found in results)
+            // Ensure all discovered functions have metrics (zeros if not found in results)
             foreach (var function in app.Functions)
             {
                 var shortName = GetShortFunctionName(function.Name);
