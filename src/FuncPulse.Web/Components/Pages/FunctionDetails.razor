@@ -186,7 +186,7 @@
                                     @foreach (var entry in invocationLog.Entries)
                                     {
                                         <div class="log-entry log-level-@entry.Level.ToLower()">
-                                            <span class="log-timestamp">@DashboardState.FormatDateTime(entry.Timestamp, "HH:mm:ss.fff")</span>
+                                            <span class="log-timestamp">@DashboardState.FormatDateTime(entry.Timestamp, "HH:mm:ss.fff") @DashboardState.GetTimeZoneLabel()</span>
                                             <span class="badge bg-@GetLogLevelBadgeClass(entry.Level)">@entry.Level</span>
                                             <span class="log-message">@entry.Message</span>
                                             

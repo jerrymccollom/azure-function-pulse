@@ -34,6 +34,8 @@ public sealed class DashboardState
 
     public string FormatDateTime(DateTime dateTime, string format = "yyyy-MM-dd HH:mm:ss")
     {
+        dateTime = NormalizeTimestamp(dateTime);
+
         if (_timeDisplayMode == TimeDisplayMode.Local)
         {
             var localTime = dateTime.Kind == DateTimeKind.Utc 
@@ -53,6 +55,13 @@ public sealed class DashboardState
     public string GetTimeZoneLabel()
     {
         return _timeDisplayMode == TimeDisplayMode.Local ? "Local" : "UTC";
+    }
+
+    private static DateTime NormalizeTimestamp(DateTime dateTime)
+    {
+        return dateTime.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
+            : dateTime;
     }
 
     public void Capture(
