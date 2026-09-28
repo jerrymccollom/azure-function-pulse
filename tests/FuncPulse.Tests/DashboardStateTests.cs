@@ -109,4 +109,14 @@ public class DashboardStateTests
             "/function/my%20app/my-app%2FMy%20Function?appInsightsResourceId=%2Fsubscriptions%2Fdemo%2FresourceGroups%2Fdemo%2Fproviders%2Fmicrosoft.insights%2Fcomponents%2Fmy-ai",
             uri);
     }
+
+    [Fact]
+    public void FormatDateTime_ThrowsForUnspecifiedValues()
+    {
+        var state = new DashboardState();
+
+        var act = () => state.FormatDateTime(new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Unspecified));
+
+        Assert.Throws<ArgumentException>(act);
+    }
 }

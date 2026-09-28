@@ -50,7 +50,7 @@
                 }
             </div>
         </div>
-        <div class="col-md-6">
+        <div class="col-md-3">
             <label class="form-label">Time Display</label>
             <div class="btn-group" role="group">
                 <button type="button" 
@@ -64,6 +64,14 @@
                     UTC
                 </button>
             </div>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button type="button" 
+                    class="btn btn-outline-primary ms-auto"
+                    @onclick="RefreshDataAsync"
+                    disabled="@isLoading">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
         </div>
     </div>
 
@@ -178,7 +186,7 @@
                                     @foreach (var entry in invocationLog.Entries)
                                     {
                                         <div class="log-entry log-level-@entry.Level.ToLower()">
-                                            <span class="log-timestamp">@DashboardState.FormatDateTime(entry.Timestamp, "HH:mm:ss.fff")</span>
+                                            <span class="log-timestamp">@DashboardState.FormatDateTime(entry.Timestamp, "yyyy-MM-dd HH:mm:ss.fff") @DashboardState.GetTimeZoneLabel()</span>
                                             <span class="badge bg-@GetLogLevelBadgeClass(entry.Level)">@entry.Level</span>
                                             <span class="log-message">@entry.Message</span>
                                             
@@ -340,6 +348,16 @@
             isLoading = false;
             StateHasChanged();
         }
+    }
+
+    private async Task RefreshDataAsync()
+    {
+        // Clear any selected invocation and logs when refreshing
+        selectedInvocation = null;
+        invocationLog = null;
+        logsUnavailableMessage = null;
+        
+        await LoadInvocationsAsync();
     }
 
     private async Task ViewLogs(FunctionInvocation invocation)
