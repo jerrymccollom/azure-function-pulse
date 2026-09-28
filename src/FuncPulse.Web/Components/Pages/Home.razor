@@ -383,7 +383,7 @@
             availableResourceGroups = snapshot.AvailableResourceGroups.ToList();
             functionApps = snapshot.FunctionApps.ToList();
             restoredFromState = true;
-            showRefreshPrompt = false;
+            showRefreshPrompt = snapshot.ShouldPromptForRefresh;
             isLoading = false;
         }
         
