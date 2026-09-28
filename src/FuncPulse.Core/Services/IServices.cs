@@ -27,6 +27,9 @@ public interface IFunctionManagementService
     Task<bool> StopAsync(string resourceId, CancellationToken cancellationToken = default);
     Task<bool> RestartAsync(string resourceId, CancellationToken cancellationToken = default);
     Task<bool> CanManageAsync(string subscriptionId, string resourceGroup, CancellationToken cancellationToken = default);
+    Task<bool> EnableFunctionAsync(string appResourceId, string functionName, CancellationToken cancellationToken = default);
+    Task<bool> DisableFunctionAsync(string appResourceId, string functionName, CancellationToken cancellationToken = default);
+    Task<bool> IsFunctionEnabledAsync(string appResourceId, string functionName, CancellationToken cancellationToken = default);
 }
 
 public enum FunctionAppState

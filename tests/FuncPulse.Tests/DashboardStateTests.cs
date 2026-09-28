@@ -106,7 +106,7 @@ public class DashboardStateTests
         var uri = FunctionDetailsNavigation.BuildUri(app, function);
 
         Assert.Equal(
-            "/function/my%20app/my-app%2FMy%20Function?appInsightsResourceId=%2Fsubscriptions%2Fdemo%2FresourceGroups%2Fdemo%2Fproviders%2Fmicrosoft.insights%2Fcomponents%2Fmy-ai",
+            "/function/my%20app/my-app%2FMy%20Function?appInsightsResourceId=%2Fsubscriptions%2Fdemo%2FresourceGroups%2Fdemo%2Fproviders%2Fmicrosoft.insights%2Fcomponents%2Fmy-ai&appResourceId=resource-id",
             uri);
     }
 

@@ -282,9 +282,8 @@
                                         <th>Function</th>
                                         <th>Trigger</th>
                                         <th>Status</th>
-                                        <th>Invocations</th>
-                                        <th>Success Rate</th>
-                                        <th>Failures</th>
+                                        <th>Success</th>
+                                        <th>Failure</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -305,27 +304,8 @@
                                             <td>@GetShortFunctionName(function.Name)</td>
                                             <td><span class="badge bg-info">@function.TriggerType</span></td>
                                             <td><span class="badge bg-@statusClass">@status</span></td>
-                                            <td>@(metrics?.TotalCount ?? 0)</td>
-                                            <td>
-                                                @if (metrics != null && metrics.TotalCount > 0)
-                                                {
-                                                    @($"{(100 - metrics.FailureRate):F1}%")
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">N/A</span>
-                                                }
-                                            </td>
-                                            <td>
-                                                @if (metrics != null && metrics.FailureCount > 0)
-                                                {
-                                                    <span class="badge bg-danger">@metrics.FailureCount</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">0</span>
-                                                }
-                                            </td>
+                                            <td>@(metrics?.SuccessCount ?? 0)</td>
+                                            <td>@(metrics?.FailureCount ?? 0)</td>
                                             <td>
                                                 <button class="btn btn-sm btn-outline-primary"
                                                         @onclick="() => ViewFunctionDetails(app, function)">

@@ -8,6 +8,8 @@
 @inject ILogsService LogsService
 @inject NavigationManager Navigation
 @inject DashboardState DashboardState
+@inject IFunctionManagementService ManagementService
+@inject ILogger<FunctionDetails> Logger
 
 <PageTitle>@FunctionName - FuncPulse</PageTitle>
 
@@ -29,7 +31,33 @@
             <h2>@GetShortFunctionName(FunctionName)</h2>
             <p class="text-muted">Function App: @AppName</p>
         </div>
-        <div class="col-auto">
+        <div class="col-auto d-flex gap-2">
+            @if (canManageFunction)
+            {
+                <button type="button" 
+                        class="btn @(isFunctionEnabled ? "btn-outline-warning" : "btn-outline-success")"
+                        @onclick="ToggleFunctionStateAsync"
+                        disabled="@isManagingFunction">
+                    @if (isManagingFunction)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-@(isFunctionEnabled ? "stop-circle" : "play-circle") me-1"></i>
+                    }
+                    @(isFunctionEnabled ? "Disable" : "Enable") Function
+                </button>
+            }
+            else if (!string.IsNullOrEmpty(AppInsightsResourceId))
+            {
+                <button type="button" 
+                        class="btn btn-outline-secondary" 
+                        disabled
+                        title="Insufficient permissions to manage functions">
+                    <i class="bi bi-lock"></i> Management Disabled
+                </button>
+            }
             <button type="button" class="btn btn-outline-secondary" @onclick="BackToDashboard">
                 Back to Dashboard
             </button>
@@ -110,7 +138,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var invocation in invocations.Take(100))
+                                    @foreach (var invocation in PagedInvocations)
                                     {
                                         <tr class="@(selectedInvocation?.OperationId == invocation.OperationId ? "table-active" : null)">
                                             <td>@DashboardState.FormatDateTime(invocation.Timestamp) @DashboardState.GetTimeZoneLabel()</td>
@@ -127,19 +155,36 @@
                                             <td>@invocation.Duration.TotalMilliseconds.ToString("F0") ms</td>
                                             <td>@invocation.ResultCode</td>
                                             <td>
-                                                @if (!invocation.Success)
-                                                {
-                                                    <button class="btn btn-sm @(selectedInvocation?.OperationId == invocation.OperationId ? "btn-danger" : "btn-outline-danger")"
-                                                            @onclick="() => ViewLogs(invocation)">
-                                                        View Logs
-                                                    </button>
-                                                }
+                                                <button class="btn btn-sm @(selectedInvocation?.OperationId == invocation.OperationId ? (invocation.Success ? "btn-primary" : "btn-danger") : (invocation.Success ? "btn-outline-primary" : "btn-outline-danger"))"
+                                                        @onclick="() => ViewLogs(invocation)">
+                                                    View Logs
+                                                </button>
                                             </td>
                                         </tr>
                                     }
                                 </tbody>
                             </table>
                         </div>
+                        @if (TotalPages > 1)
+                        {
+                            <nav class="mt-3" aria-label="Invocations pagination">
+                                <ul class="pagination pagination-sm justify-content-center mb-0">
+                                    <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                        <button class="page-link" @onclick="() => ChangePage(currentPage - 1)" disabled="@(currentPage == 1)">Previous</button>
+                                    </li>
+                                    @for (int i = 1; i <= TotalPages; i++)
+                                    {
+                                        var pageNum = i;
+                                        <li class="page-item @(currentPage == pageNum ? "active" : "")">
+                                            <button class="page-link" @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                                        </li>
+                                    }
+                                    <li class="page-item @(currentPage == TotalPages ? "disabled" : "")">
+                                        <button class="page-link" @onclick="() => ChangePage(currentPage + 1)" disabled="@(currentPage == TotalPages)">Next</button>
+                                    </li>
+                                </ul>
+                            </nav>
+                        }
                     </div>
                 </div>
             </div>
@@ -148,8 +193,8 @@
             {
                 <div class="col-12 col-xl-7">
                     <div class="card invocation-logs-card">
-                        <div class="card-header bg-danger text-white">
-                            <h5>Failed Invocation Logs</h5>
+                        <div class="card-header @(selectedInvocation.Success ? "bg-success" : "bg-danger") text-white">
+                            <h5>@(selectedInvocation.Success ? "Successful" : "Failed") Invocation Logs</h5>
                             <button type="button" class="btn-close btn-close-white float-end" @onclick="ClearLogs"></button>
                         </div>
                         <div class="card-body">
@@ -299,6 +344,10 @@
     [SupplyParameterFromQuery(Name = FunctionDetailsNavigation.AppInsightsResourceIdQueryParameter)]
     public string? AppInsightsResourceId { get; set; }
 
+    [Parameter]
+    [SupplyParameterFromQuery(Name = FunctionDetailsNavigation.AppResourceIdQueryParameter)]
+    public string? AppResourceId { get; set; }
+
     private TimeRange selectedTimeRange = TimeRange.Hours24;
     private List<FunctionInvocation> invocations = new();
     private FunctionInvocation? selectedInvocation;
@@ -306,10 +355,22 @@
     private bool isLoading = true;
     private bool loadingLogs;
     private string? logsUnavailableMessage;
+    private int currentPage = 1;
+    private const int PageSize = 20;
+    private int TotalPages => (int)Math.Ceiling((double)invocations.Count / PageSize);
+    private List<FunctionInvocation> PagedInvocations => invocations.Skip((currentPage - 1) * PageSize).Take(PageSize).ToList();
+    private bool canManageFunction;
+    private bool isFunctionEnabled = true;
+    private bool isManagingFunction;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadInvocationsAsync();
+        
+        if (!string.IsNullOrEmpty(AppResourceId))
+        {
+            await CheckFunctionManagementPermissionsAsync();
+        }
     }
 
     private async Task SelectTimeRange(TimeRange range)
@@ -317,6 +378,7 @@
         selectedTimeRange = range;
         selectedInvocation = null;
         invocationLog = null;
+        currentPage = 1;
         await LoadInvocationsAsync();
     }
 
@@ -356,6 +418,7 @@
         selectedInvocation = null;
         invocationLog = null;
         logsUnavailableMessage = null;
+        currentPage = 1;
         
         await LoadInvocationsAsync();
     }
@@ -416,5 +479,71 @@
         // Extract short name from full path (e.g., "resource-name/function-name" -> "function-name")
         var lastSlashIndex = fullName.LastIndexOf('/');
         return lastSlashIndex >= 0 ? fullName.Substring(lastSlashIndex + 1) : fullName;
+    }
+
+    private void ChangePage(int pageNumber)
+    {
+        if (pageNumber < 1 || pageNumber > TotalPages)
+            return;
+        
+        currentPage = pageNumber;
+        StateHasChanged();
+    }
+
+    private async Task CheckFunctionManagementPermissionsAsync()
+    {
+        if (string.IsNullOrEmpty(AppResourceId))
+        {
+            canManageFunction = false;
+            return;
+        }
+
+        try
+        {
+            isFunctionEnabled = await ManagementService.IsFunctionEnabledAsync(AppResourceId, FunctionName);
+            canManageFunction = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to check function management permissions");
+            canManageFunction = false;
+        }
+    }
+
+    private async Task ToggleFunctionStateAsync()
+    {
+        if (string.IsNullOrEmpty(AppResourceId))
+            return;
+
+        isManagingFunction = true;
+        StateHasChanged();
+
+        try
+        {
+            if (isFunctionEnabled)
+            {
+                await ManagementService.DisableFunctionAsync(AppResourceId, FunctionName);
+                isFunctionEnabled = false;
+            }
+            else
+            {
+                await ManagementService.EnableFunctionAsync(AppResourceId, FunctionName);
+                isFunctionEnabled = true;
+            }
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Logger.LogWarning(ex, "Permission denied when toggling function state");
+            canManageFunction = false;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to toggle function state");
+        }
+        finally
+        {
+            isManagingFunction = false;
+            StateHasChanged();
+        }
     }
 }
