@@ -42,6 +42,19 @@ public class FunctionManagementService : IFunctionManagementService
         }
     }
 
+    /// <summary>
+    /// Constructor that accepts a pre-configured ArmClient (used for user-delegated credentials).
+    /// </summary>
+    public FunctionManagementService(
+        IOptions<AzureSettings> settings,
+        ILogger<FunctionManagementService> logger,
+        ArmClient armClient)
+    {
+        _settings = settings.Value;
+        _logger = logger;
+        _armClient = armClient;
+    }
+
     public async Task<FunctionAppState> GetStateAsync(string resourceId, CancellationToken cancellationToken = default)
     {
         if (_settings.DemoMode)

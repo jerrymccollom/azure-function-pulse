@@ -47,6 +47,19 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
         }
     }
 
+    /// <summary>
+    /// Constructor that accepts a pre-configured ArmClient (used for user-delegated credentials).
+    /// </summary>
+    public FunctionDiscoveryService(
+        IOptions<AzureSettings> settings,
+        ILogger<FunctionDiscoveryService> logger,
+        ArmClient armClient)
+    {
+        _settings = settings.Value;
+        _logger = logger;
+        _armClient = armClient;
+    }
+
     public async Task<List<FunctionAppInfo>> DiscoverFunctionAppsAsync(
         string subscriptionId, 
         string resourceGroup, 

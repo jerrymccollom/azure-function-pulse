@@ -12,6 +12,7 @@
 @inject DashboardState DashboardState
 @inject IFunctionManagementService ManagementService
 @inject ILogger<Home> Logger
+@inject IAzureCredentialService CredentialService
 
 <PageTitle>FuncPulse - Dashboard</PageTitle>
 
@@ -23,6 +24,24 @@
             {
                 <div class="alert alert-info">
                     <strong>Demo Mode:</strong> Showing sample data. Configure Azure credentials to view real functions.
+                </div>
+            }
+            else if (AzureCredentialFactory.IsRunningInAzure() && !CredentialService.IsUserAuthenticated)
+            {
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>Not Signed In:</strong> Sign in with your Microsoft account to view your Azure Function Apps.
+                    <a href="MicrosoftIdentity/Account/SignIn" class="btn btn-sm btn-primary ms-3">
+                        <i class="bi bi-box-arrow-in-right me-1"></i>
+                        Sign in with Microsoft
+                    </a>
+                </div>
+            }
+            else if (CredentialService.IsUserAuthenticated)
+            {
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    Viewing Azure resources with your credentials (@CredentialService.UserDisplayName)
                 </div>
             }
         </div>

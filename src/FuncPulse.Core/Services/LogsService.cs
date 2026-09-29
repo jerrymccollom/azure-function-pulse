@@ -42,6 +42,19 @@ public class LogsService : ILogsService
         }
     }
 
+    /// <summary>
+    /// Constructor that accepts a pre-configured TokenCredential (used for user-delegated credentials).
+    /// </summary>
+    public LogsService(
+        IOptions<AzureSettings> settings,
+        ILogger<LogsService> logger,
+        TokenCredential credential)
+    {
+        _settings = settings.Value;
+        _logger = logger;
+        _logsClient = new LogsQueryClient(credential);
+    }
+
     public async Task<InvocationLog?> GetInvocationLogsAsync(
         string appInsightsResourceId, 
         string operationId, 

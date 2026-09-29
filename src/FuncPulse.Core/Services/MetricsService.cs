@@ -43,6 +43,19 @@ public class MetricsService : IMetricsService
         }
     }
 
+    /// <summary>
+    /// Constructor that accepts a pre-configured TokenCredential (used for user-delegated credentials).
+    /// </summary>
+    public MetricsService(
+        IOptions<AzureSettings> settings,
+        ILogger<MetricsService> logger,
+        TokenCredential credential)
+    {
+        _settings = settings.Value;
+        _logger = logger;
+        _logsClient = new LogsQueryClient(credential);
+    }
+
     public async Task<Dictionary<string, FunctionMetrics>> GetAppMetricsAsync(
         FunctionAppInfo app,
         TimeRange timeRange,
