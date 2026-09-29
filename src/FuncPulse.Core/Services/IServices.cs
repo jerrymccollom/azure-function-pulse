@@ -4,6 +4,7 @@ namespace FuncPulse.Core.Services;
 
 public interface IFunctionDiscoveryService
 {
+    Task<string> GetSubscriptionIdAsync(CancellationToken cancellationToken = default);
     Task<List<FunctionAppInfo>> DiscoverFunctionAppsAsync(string subscriptionId, string resourceGroup, CancellationToken cancellationToken = default);
     Task<List<string>> ListResourceGroupsAsync(string subscriptionId, CancellationToken cancellationToken = default);
 }

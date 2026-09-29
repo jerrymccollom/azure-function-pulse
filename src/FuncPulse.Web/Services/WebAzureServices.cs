@@ -43,6 +43,19 @@ public class WebFunctionDiscoveryService : IFunctionDiscoveryService
         return await service.DiscoverFunctionAppsAsync(subscriptionId, resourceGroup, cancellationToken);
     }
 
+    public async Task<string> GetSubscriptionIdAsync(CancellationToken cancellationToken = default)
+    {
+        if (_settings.Value.DemoMode)
+        {
+            return string.Empty;
+        }
+
+        var credential = await _credentialService.CreateCredentialAsync();
+        var armClient = new ArmClient(credential);
+        var service = new FunctionDiscoveryService(_settings, _loggerFactory.CreateLogger<FunctionDiscoveryService>(), armClient);
+        return await service.GetSubscriptionIdAsync(cancellationToken);
+    }
+
     public async Task<List<string>> ListResourceGroupsAsync(
         string subscriptionId, 
         CancellationToken cancellationToken = default)
