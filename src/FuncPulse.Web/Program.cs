@@ -19,6 +19,7 @@ builder.Logging.SetMinimumLevel(LogLevel.Information);
 // Configure Azure AD authentication if not in demo mode
 var azureSettings = builder.Configuration.GetSection(AzureSettings.SectionName).Get<AzureSettings>();
 var isAzureHosted = FuncPulse.Core.Services.AzureCredentialFactory.IsRunningInAzure();
+var isAzureAdConfigured = false;
 
 if (!azureSettings?.DemoMode == true && isAzureHosted)
 {
@@ -41,6 +42,7 @@ if (!azureSettings?.DemoMode == true && isAzureHosted)
         builder.Services.AddControllersWithViews()
             .AddMicrosoftIdentityUI();
         
+        isAzureAdConfigured = true;
         Console.WriteLine($"[{timestamp}] Azure AD authentication configured");
     }
     else
@@ -85,16 +87,36 @@ if (azureSettings != null)
     }
 }
 
-// Register authentication services
+// Register services based on Azure AD configuration
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<IUserCredentialProvider, UserCredentialProvider>();
-builder.Services.AddScoped<IAzureCredentialService, AzureCredentialService>();
 
-// Register wrapper services that use user-aware credentials
-builder.Services.AddScoped<IFunctionDiscoveryService, WebFunctionDiscoveryService>();
-builder.Services.AddScoped<IMetricsService, WebMetricsService>();
-builder.Services.AddScoped<ILogsService, WebLogsService>();
-builder.Services.AddScoped<IFunctionManagementService, WebFunctionManagementService>();
+if (isAzureAdConfigured)
+{
+    timestamp = DateTime.Now.ToString("HH:mm:ss");
+    Console.WriteLine($"[{timestamp}] Registering user-aware Azure services (with Azure AD authentication)");
+    
+    // Register user-aware authentication services
+    builder.Services.AddScoped<IUserCredentialProvider, UserCredentialProvider>();
+    builder.Services.AddScoped<IAzureCredentialService, AzureCredentialService>();
+
+    // Register wrapper services that use user-delegated credentials
+    builder.Services.AddScoped<IFunctionDiscoveryService, WebFunctionDiscoveryService>();
+    builder.Services.AddScoped<IMetricsService, WebMetricsService>();
+    builder.Services.AddScoped<ILogsService, WebLogsService>();
+    builder.Services.AddScoped<IFunctionManagementService, WebFunctionManagementService>();
+}
+else
+{
+    timestamp = DateTime.Now.ToString("HH:mm:ss");
+    Console.WriteLine($"[{timestamp}] Registering core Azure services (using Azure CLI/Managed Identity credentials)");
+    
+    // Register core services directly (they use AzureCredentialFactory for local/managed identity)
+    builder.Services.AddScoped<IFunctionDiscoveryService, FunctionDiscoveryService>();
+    builder.Services.AddScoped<IMetricsService, MetricsService>();
+    builder.Services.AddScoped<ILogsService, LogsService>();
+    builder.Services.AddScoped<IFunctionManagementService, FunctionManagementService>();
+}
+
 builder.Services.AddScoped<DashboardState>();
 
 timestamp = DateTime.Now.ToString("HH:mm:ss");
