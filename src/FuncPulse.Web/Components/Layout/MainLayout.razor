@@ -1,4 +1,7 @@
-﻿@inherits LayoutComponentBase
+﻿@using FuncPulse.Core.Services
+@using FuncPulse.Web.Services
+@inherits LayoutComponentBase
+@inject IAzureCredentialService CredentialService
 
 <div class="page">
     <div class="sidebar">
@@ -6,7 +9,13 @@
     </div>
 
     <main>
-        <div class="top-row px-4">
+        <div class="top-row px-4 d-flex justify-content-between align-items-center">
+            <div>
+                @if (AzureCredentialFactory.IsRunningInAzure())
+                {
+                    <LoginDisplay />
+                }
+            </div>
             <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
         </div>
 
