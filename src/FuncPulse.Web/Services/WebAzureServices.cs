@@ -33,8 +33,8 @@ public class WebFunctionDiscoveryService : IFunctionDiscoveryService
     {
         if (_settings.Value.DemoMode)
         {
-            var service = new FunctionDiscoveryService(_settings, _loggerFactory.CreateLogger<FunctionDiscoveryService>());
-            return await service.DiscoverFunctionAppsAsync(subscriptionId, resourceGroup, cancellationToken);
+            var demoService = new FunctionDiscoveryService(_settings, _loggerFactory.CreateLogger<FunctionDiscoveryService>());
+            return await demoService.DiscoverFunctionAppsAsync(subscriptionId, resourceGroup, cancellationToken);
         }
 
         var credential = await _credentialService.CreateCredentialAsync();
@@ -49,8 +49,8 @@ public class WebFunctionDiscoveryService : IFunctionDiscoveryService
     {
         if (_settings.Value.DemoMode)
         {
-            var service = new FunctionDiscoveryService(_settings, _loggerFactory.CreateLogger<FunctionDiscoveryService>());
-            return await service.ListResourceGroupsAsync(subscriptionId, cancellationToken);
+            var demoService = new FunctionDiscoveryService(_settings, _loggerFactory.CreateLogger<FunctionDiscoveryService>());
+            return await demoService.ListResourceGroupsAsync(subscriptionId, cancellationToken);
         }
 
         var credential = await _credentialService.CreateCredentialAsync();
