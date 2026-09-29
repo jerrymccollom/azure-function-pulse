@@ -38,10 +38,8 @@ FuncPulse is configured via `appsettings.json` or environment variables:
 ```json
 {
   "Azure": {
-    "SubscriptionId": "your-subscription-id",
-    "ResourceGroup": "your-resource-group",
-    "TenantId": "your-tenant-id",
-    "DemoMode": false
+    "DemoMode": false,
+    "OperationTimeoutSeconds": 300
   },
   "HealthThresholds": {
     "WarningThreshold": 1.0,
@@ -54,9 +52,6 @@ FuncPulse is configured via `appsettings.json` or environment variables:
 
 | Setting | Description | Required | Default |
 |---------|-------------|----------|---------|
-| `Azure:SubscriptionId` | Azure subscription ID containing the resource group | Yes (unless DemoMode) | - |
-| `Azure:ResourceGroup` | Resource group name to monitor | Yes (unless DemoMode) | - |
-| `Azure:TenantId` | Azure AD tenant ID | No | - |
 | `Azure:DemoMode` | Enable demo mode with sample data (no Azure auth required) | No | `true` |
 | `Azure:OperationTimeoutSeconds` | Timeout in seconds for Azure operations (discovery, metrics, logs) | No | `300` (5 minutes) |
 | `HealthThresholds:WarningThreshold` | Failure rate % threshold for warning status (amber) | No | `1.0` |
@@ -67,9 +62,6 @@ FuncPulse is configured via `appsettings.json` or environment variables:
 You can also configure FuncPulse using environment variables:
 
 ```bash
-export Azure__SubscriptionId="your-subscription-id"
-export Azure__ResourceGroup="your-resource-group"
-export Azure__TenantId="your-tenant-id"
 export Azure__DemoMode="false"
 export Azure__OperationTimeoutSeconds="300"
 ```
@@ -191,9 +183,9 @@ Demo mode is enabled by default in `appsettings.json` (`"DemoMode": true`).
 
 ### Production Mode (Azure Authentication)
 
-1. Configure your Azure subscription and resource group in `appsettings.json` or via environment variables
+1. Authenticate and select your subscription using Azure CLI: `az login` and `az account set --subscription <subscription-id>`
 2. Set `"DemoMode": false`
-3. Authenticate using Azure CLI: `az login`
+3. Run the application; it discovers resource groups in the selected subscription
 4. Run the application:
 
 ```bash
@@ -266,9 +258,6 @@ When running with `DemoMode: false`, FuncPulse automatically outputs verbose con
 [15:30:00] FuncPulse starting...
 [15:30:00] Configuration loaded:
   - DemoMode: False
-  - SubscriptionId: 12345678...
-  - ResourceGroup: my-functions-rg
-  - TenantId: abcdef12...
 [15:30:00] Azure production mode enabled - verbose logging active
 [15:30:00] Will use DefaultAzureCredential (tries: Environment → Managed Identity → Azure CLI → PowerShell → Visual Studio)
 [15:30:00] Building application...
@@ -324,13 +313,11 @@ After timeout, you'll see a helpful error message in the UI explaining common ca
 
 If you still experience delays, it's the authentication process (see verbose logging output). Use `az login --use-device-code` for faster, more reliable authentication.
 
-### "Azure subscription and resource group not configured"
+### "Unable to determine the Azure subscription"
 
-**Cause**: `Azure:SubscriptionId` or `Azure:ResourceGroup` is not set, and `DemoMode` is `false`.
+**Cause**: The Azure CLI is not logged in or has no selected subscription.
 
-**Solution**: Either:
-- Set the configuration values in `appsettings.json` or via environment variables
-- Or set `"DemoMode": true` to use sample data
+**Solution**: Run `az login`, then select a subscription with `az account set --subscription <subscription-id>`. Or set `"DemoMode": true` to use sample data.
 
 ### "Failed to discover function apps"
 
@@ -339,7 +326,7 @@ If you still experience delays, it's the authentication process (see verbose log
 **Solution**:
 1. Verify authentication: `az account show`
 2. Verify RBAC permissions: Ensure you have **Reader** role on the resource group
-3. Check the resource group name and subscription ID are correct
+3. Confirm the desired subscription is selected with `az account show`; resource groups are discovered from it.
 
 ### "Logs unavailable - Application Insights not configured"
 

@@ -14,9 +14,7 @@ public class ResourceGroupDiscoveryTests
         // Arrange
         var settings = Options.Create(new AzureSettings 
         { 
-            DemoMode = true,
-            SubscriptionId = "demo-sub",
-            ResourceGroup = "demo-rg"
+            DemoMode = true
         });
         var logger = NullLogger<FunctionDiscoveryService>.Instance;
         var service = new FunctionDiscoveryService(settings, logger);
@@ -38,9 +36,7 @@ public class ResourceGroupDiscoveryTests
         // Arrange
         var settings = Options.Create(new AzureSettings 
         { 
-            DemoMode = true,
-            SubscriptionId = "demo-sub",
-            ResourceGroup = "demo-rg"
+            DemoMode = true
         });
         var logger = NullLogger<FunctionDiscoveryService>.Instance;
         var service = new FunctionDiscoveryService(settings, logger);
@@ -63,9 +59,7 @@ public class ResourceGroupDiscoveryTests
         // Arrange
         var settings = Options.Create(new AzureSettings 
         { 
-            DemoMode = true,
-            SubscriptionId = "demo-sub",
-            ResourceGroup = "demo-rg"
+            DemoMode = true
         });
         var logger = NullLogger<FunctionDiscoveryService>.Instance;
         var service = new FunctionDiscoveryService(settings, logger);
@@ -87,9 +81,7 @@ public class ResourceGroupDiscoveryTests
         // Arrange
         var settings = Options.Create(new AzureSettings 
         { 
-            DemoMode = true,
-            SubscriptionId = "demo-sub",
-            ResourceGroup = "demo-rg"
+            DemoMode = true
         });
         var logger = NullLogger<FunctionDiscoveryService>.Instance;
         var service = new FunctionDiscoveryService(settings, logger);

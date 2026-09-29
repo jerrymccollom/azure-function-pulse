@@ -15,9 +15,7 @@ public class MetricsServiceTests
         // Arrange
         var settings = Options.Create(new AzureSettings 
         { 
-            DemoMode = true,
-            SubscriptionId = "demo-sub",
-            ResourceGroup = "demo-rg"
+            DemoMode = true
         });
         var logger = NullLogger<MetricsService>.Instance;
         var service = new MetricsService(settings, logger);
@@ -51,9 +49,7 @@ public class MetricsServiceTests
         // Arrange
         var settings = Options.Create(new AzureSettings 
         { 
-            DemoMode = true,
-            SubscriptionId = "demo-sub",
-            ResourceGroup = "demo-rg"
+            DemoMode = true
         });
         var logger = NullLogger<MetricsService>.Instance;
         var service = new MetricsService(settings, logger);
@@ -88,9 +84,7 @@ public class MetricsServiceTests
         // Arrange
         var settings = Options.Create(new AzureSettings 
         { 
-            DemoMode = true,
-            SubscriptionId = "demo-sub",
-            ResourceGroup = "demo-rg"
+            DemoMode = true
         });
         var logger = NullLogger<MetricsService>.Instance;
         var service = new MetricsService(settings, logger);

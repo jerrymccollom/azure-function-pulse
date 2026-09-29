@@ -80,9 +80,6 @@ Add the following application settings to your Azure App Service:
 | `AzureAd__Domain` | Your Azure AD domain | `contoso.onmicrosoft.com` |
 | `AzureAd__Instance` | Azure AD instance | `https://login.microsoftonline.com/` |
 | `Azure__DemoMode` | Set to false to enable Azure mode | `false` |
-| `Azure__SubscriptionId` | Your Azure subscription ID (optional) | `12345678-abcd-efgh-ijkl-123456789012` |
-| `Azure__ResourceGroup` | Default resource group (optional) | `my-functions-rg` |
-| `Azure__TenantId` | Azure tenant ID (optional, can be same as AzureAd__TenantId) | `12345678-1234-1234-1234-123456789abc` |
 
 4. Click **Save**
 

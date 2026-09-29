@@ -65,9 +65,6 @@ if (azureSettings != null)
     timestamp = DateTime.Now.ToString("HH:mm:ss");
     Console.WriteLine($"[{timestamp}] Configuration loaded:");
     Console.WriteLine($"  - DemoMode: {azureSettings.DemoMode}");
-    Console.WriteLine($"  - SubscriptionId: {(string.IsNullOrEmpty(azureSettings.SubscriptionId) ? "<not set>" : $"{azureSettings.SubscriptionId[..Math.Min(8, azureSettings.SubscriptionId.Length)]}...")}");
-    Console.WriteLine($"  - ResourceGroup: {(string.IsNullOrEmpty(azureSettings.ResourceGroup) ? "<not set>" : azureSettings.ResourceGroup)}");
-    Console.WriteLine($"  - TenantId: {(string.IsNullOrEmpty(azureSettings.TenantId) ? "<not set>" : $"{azureSettings.TenantId[..Math.Min(8, azureSettings.TenantId.Length)]}...")}");
     
     if (!azureSettings.DemoMode)
     {

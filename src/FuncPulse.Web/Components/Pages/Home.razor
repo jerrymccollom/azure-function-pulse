@@ -366,33 +366,6 @@
             return status == HealthStatus.Warning || status == HealthStatus.Critical;
         });
 
-    protected override async Task OnInitializedAsync()
-    {
-        subscriptionId = AzureSettings.Value.SubscriptionId;
-        resourceGroup = AzureSettings.Value.ResourceGroup;
-
-        if (DashboardState.TryRestore(subscriptionId, out var snapshot))
-        {
-            resourceGroup = snapshot.ResourceGroup;
-            selectedTimeRange = snapshot.SelectedTimeRange;
-            availableResourceGroups = snapshot.AvailableResourceGroups.ToList();
-            functionApps = snapshot.FunctionApps.ToList();
-            restoredFromState = true;
-            showRefreshPrompt = snapshot.ShouldPromptForRefresh;
-        }
-        
-        // Don't load data here - it blocks the first render
-        // Data loading moved to OnAfterRenderAsync
-        
-        if (!AzureSettings.Value.DemoMode)
-        {
-            if (string.IsNullOrEmpty(subscriptionId))
-            {
-                errorMessage = "Azure subscription not configured. Update appsettings.json or environment variables.";
-            }
-        }
-    }
-
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -402,29 +375,67 @@
                 // Demo mode: load function apps directly
                 await LoadDataAsync();
             }
-            else if (!string.IsNullOrEmpty(subscriptionId))
+            else
             {
-                if (restoredFromState)
-                {
-                    await LoadResourceGroupsAsync(showLoadingState: false);
-                    await CheckManagementPermissionsAsync();
-                    if (canManageApps)
-                    {
-                        await LoadAppStatesAsync();
-                    }
-                    StateHasChanged();
-                    return;
-                }
+                await InitializeAzureAsync();
+            }
+        }
+    }
 
-                // Always load resource groups for dropdown
-                await LoadResourceGroupsAsync();
-                
-                // If RG is already configured, load function apps
-                if (!string.IsNullOrEmpty(resourceGroup))
+    private async Task InitializeAzureAsync()
+    {
+        isDiscovering = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var timeoutSeconds = AzureSettings.Value.OperationTimeoutSeconds;
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+            subscriptionId = await DiscoveryService.GetSubscriptionIdAsync(cts.Token);
+
+            if (string.IsNullOrEmpty(subscriptionId))
+            {
+                throw new InvalidOperationException("No Azure subscription is available for the current credentials.");
+            }
+
+            if (DashboardState.TryRestore(subscriptionId, out var snapshot))
+            {
+                resourceGroup = snapshot.ResourceGroup;
+                selectedTimeRange = snapshot.SelectedTimeRange;
+                availableResourceGroups = snapshot.AvailableResourceGroups.ToList();
+                functionApps = snapshot.FunctionApps.ToList();
+                restoredFromState = true;
+                showRefreshPrompt = snapshot.ShouldPromptForRefresh;
+
+                await LoadResourceGroupsAsync(showLoadingState: false);
+                await CheckManagementPermissionsAsync();
+                if (canManageApps)
                 {
-                    await LoadDataAsync();
+                    await LoadAppStatesAsync();
                 }
             }
+            else
+            {
+                await LoadResourceGroupsAsync(showLoadingState: false);
+            }
+
+            if (!restoredFromState && !string.IsNullOrEmpty(resourceGroup))
+            {
+                await LoadDataAsync();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            errorMessage = $"Timed out after {AzureSettings.Value.OperationTimeoutSeconds} seconds while determining the Azure subscription. Run 'az login' and select a subscription with 'az account set'.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Unable to determine the Azure subscription. Run 'az login' and select a subscription with 'az account set'. Details: {ex.Message}";
+        }
+        finally
+        {
+            isDiscovering = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 

@@ -232,6 +232,22 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
         }
     }
 
+    public async Task<string> GetSubscriptionIdAsync(CancellationToken cancellationToken = default)
+    {
+        if (_settings.DemoMode)
+        {
+            return string.Empty;
+        }
+
+        if (!AzureCredentialFactory.IsRunningInAzure())
+        {
+            return await AzureCredentialFactory.GetCurrentSubscriptionIdAsync(cancellationToken);
+        }
+
+        var subscription = await _armClient.GetDefaultSubscriptionAsync(cancellationToken);
+        return subscription.Data.SubscriptionId;
+    }
+
     public async Task<List<string>> ListResourceGroupsAsync(string subscriptionId, CancellationToken cancellationToken = default)
     {
         if (_settings.DemoMode)

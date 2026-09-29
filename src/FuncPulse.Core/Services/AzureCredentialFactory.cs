@@ -1,5 +1,6 @@
 using Azure.Core;
 using Azure.Identity;
+using System.Diagnostics;
 
 namespace FuncPulse.Core.Services;
 
@@ -43,6 +44,67 @@ public static class AzureCredentialFactory
             // Local development: use AzureCliCredential only (skips 30+ second IMDS timeout)
             return new AzureCliCredential();
         }
+    }
+
+    /// <summary>
+    /// Gets the currently selected subscription from the local Azure CLI context.
+    /// </summary>
+    public static async Task<string> GetCurrentSubscriptionIdAsync(CancellationToken cancellationToken = default)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = OperatingSystem.IsWindows() ? "cmd.exe" : "az",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        if (OperatingSystem.IsWindows())
+        {
+            startInfo.ArgumentList.Add("/d");
+            startInfo.ArgumentList.Add("/c");
+            startInfo.ArgumentList.Add("az");
+        }
+        startInfo.ArgumentList.Add("account");
+        startInfo.ArgumentList.Add("show");
+        startInfo.ArgumentList.Add("--query");
+        startInfo.ArgumentList.Add("id");
+        startInfo.ArgumentList.Add("--output");
+        startInfo.ArgumentList.Add("tsv");
+
+        using var process = new Process { StartInfo = startInfo };
+
+        if (!process.Start())
+        {
+            throw new InvalidOperationException("Failed to start the Azure CLI. Ensure 'az' is installed and available on PATH.");
+        }
+
+        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            throw;
+        }
+
+        var subscriptionId = (await outputTask).Trim();
+        if (process.ExitCode != 0 || string.IsNullOrEmpty(subscriptionId))
+        {
+            var error = (await errorTask).Trim();
+            throw new InvalidOperationException(
+                string.IsNullOrEmpty(error)
+                    ? "No Azure subscription is selected. Run 'az login' and select a subscription with 'az account set'."
+                    : $"Unable to get the selected Azure subscription. Run 'az login' and select a subscription with 'az account set'. {error}");
+        }
+
+        return subscriptionId;
     }
     
     /// <summary>

@@ -4,9 +4,6 @@ public class AzureSettings
 {
     public const string SectionName = "Azure";
     
-    public string SubscriptionId { get; set; } = string.Empty;
-    public string ResourceGroup { get; set; } = string.Empty;
-    public string? TenantId { get; set; }
     public bool DemoMode { get; set; }
     
     /// <summary>
