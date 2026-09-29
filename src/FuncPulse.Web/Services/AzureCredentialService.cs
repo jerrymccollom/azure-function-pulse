@@ -83,3 +83,21 @@ public class AzureCredentialService : IAzureCredentialService
         return FuncPulse.Core.Services.AzureCredentialFactory.GetCredentialDescription();
     }
 }
+
+/// <summary>
+/// Fallback implementation of <see cref="IAzureCredentialService"/> used when Azure AD sign-in
+/// is not configured (e.g. running locally or in demo mode). There is no authenticated user in
+/// this scenario, so credentials always come from the default factory (Azure CLI/Managed Identity).
+/// </summary>
+public class DefaultAzureCredentialService : IAzureCredentialService
+{
+    public bool IsUserAuthenticated => false;
+
+    public string? UserDisplayName => null;
+
+    public Task<TokenCredential> CreateCredentialAsync()
+        => Task.FromResult(FuncPulse.Core.Services.AzureCredentialFactory.CreateCredential());
+
+    public Task<string> GetCredentialDescriptionAsync()
+        => Task.FromResult(FuncPulse.Core.Services.AzureCredentialFactory.GetCredentialDescription());
+}

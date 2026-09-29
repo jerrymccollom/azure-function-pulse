@@ -115,6 +115,10 @@ else
     builder.Services.AddScoped<IMetricsService, MetricsService>();
     builder.Services.AddScoped<ILogsService, LogsService>();
     builder.Services.AddScoped<IFunctionManagementService, FunctionManagementService>();
+
+    // Razor components (MainLayout, LoginDisplay, Home) inject IAzureCredentialService directly,
+    // so a fallback registration is required even when Azure AD sign-in isn't configured.
+    builder.Services.AddScoped<IAzureCredentialService, DefaultAzureCredentialService>();
 }
 
 builder.Services.AddScoped<DashboardState>();
@@ -135,8 +139,11 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
-app.UseAuthentication();
-app.UseAuthorization();
+if (isAzureAdConfigured)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+}
 
 app.UseAntiforgery();
 
