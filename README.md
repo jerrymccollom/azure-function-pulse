@@ -119,6 +119,23 @@ For production deployments to Azure App Service or Container Apps:
 2. Grant the managed identity the required RBAC permissions (see below)
 3. Set `Azure:DemoMode` to `false` in application configuration
 
+### Deployment Behind Azure Front Door
+
+If deploying behind **Azure Front Door** (AFD), additional configuration is required:
+
+1. **ForwardedHeaders**: FuncPulse includes ForwardedHeaders middleware to read `X-Forwarded-Host` and `X-Forwarded-Proto` from AFD
+2. **PathBase**: Configure `PathBase` app setting only if AFD preserves the path prefix
+3. **Azure AD Redirect URIs**: Must use the public AFD URL (e.g., `https://ssm-dev.hcahealthcare.cloud/api/function-pulse/signin-oidc`)
+4. **Avoiding Doubled Paths**: Do not set both PathBase and AFD path rewriting — choose one pattern
+
+For detailed AFD setup instructions, see **[AZURE_AD_SETUP.md](./AZURE_AD_SETUP.md#step-5a-azure-front-door-configuration-important)**.
+
+**Quick Summary**:
+- ForwardedHeaders middleware is **pre-configured** and enabled automatically
+- Set `PathBase` app setting if AFD forwards the full path (e.g., `/api/function-pulse`)
+- Do NOT set `PathBase` if AFD strips the path prefix
+- Azure AD redirect URIs must include the full public path
+
 ### Deploying Behind Azure Front Door
 
 FuncPulse supports path-based routing through Azure Front Door or other reverse proxies. Configure the `PathBase` application setting to match your Front Door route:

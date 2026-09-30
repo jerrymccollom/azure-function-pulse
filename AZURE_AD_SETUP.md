@@ -146,6 +146,103 @@ Make sure your App Registration has the correct redirect URIs configured:
 
 **Note**: The redirect URIs must match exactly, including the path base if configured. If you change the `PathBase` setting, you must also update the redirect URIs in your Azure AD app registration.
 
+## Step 5a: Azure Front Door Configuration (Important)
+
+If your App Service is behind **Azure Front Door** (AFD), additional configuration is required to ensure OIDC redirects use the **public AFD URL** instead of the internal `azurewebsites.net` URL.
+
+### How ForwardedHeaders Works
+
+FuncPulse uses **ForwardedHeaders middleware** to read headers from Azure Front Door:
+- `X-Forwarded-Host`: The public hostname (e.g., `ssm-dev.hcahealthcare.cloud`)
+- `X-Forwarded-Proto`: The public protocol (`https`)
+- `X-Forwarded-For`: Client IP address
+
+When these headers are present, ASP.NET Core builds OIDC redirect URIs using the **public host** from `X-Forwarded-Host` instead of `azurewebsites.net`.
+
+### Configure Azure Front Door Headers
+
+Azure Front Door automatically sets `X-Forwarded-Host`, `X-Forwarded-Proto`, and `X-Forwarded-For` when forwarding requests to App Service origins. No additional AFD configuration is needed for header forwarding.
+
+### Path Handling: Avoiding Doubled Paths
+
+The doubled path issue (e.g., `/api/function-pulse/api/function-pulse/signin-oidc`) occurs when **both** AFD and App Service apply the path prefix. Choose ONE of these patterns:
+
+**Option A: AFD Preserves Path Prefix**
+- **AFD Rule**: Route pattern `/api/function-pulse/*` forwards to App Service **with the full path**
+- **App Setting**: Set `PathBase="/api/function-pulse"` in App Service configuration
+- **App Service receives**: `/api/function-pulse/signin-oidc`
+- **OIDC redirect URI**: `https://ssm-dev.hcahealthcare.cloud/api/function-pulse/signin-oidc`
+- **When to use**: When AFD acts as a simple reverse proxy without path rewriting
+
+**Option B: AFD Strips Path Prefix (Recommended)**
+- **AFD Rule**: Route pattern `/api/function-pulse/*` forwards to App Service **with path rewritten to root** (`/*`)
+- **App Setting**: **DO NOT** set `PathBase` in App Service configuration
+- **App Service receives**: `/signin-oidc` (prefix stripped by AFD)
+- **OIDC redirect URI**: Still `https://ssm-dev.hcahealthcare.cloud/api/function-pulse/signin-oidc` (AFD reconstructs it)
+- **When to use**: Preferred pattern for multi-tenant AFD routing multiple apps
+
+### Example AFD Configuration (Azure Portal)
+
+**Option A: Preserve Path**
+
+1. Go to **Azure Front Door** > **Front Door Designer**
+2. Create or edit a routing rule:
+   - Route Pattern: `/api/function-pulse/*`
+   - Origin: Your App Service
+   - Path Override: Leave empty or set to `/*` (forward as-is)
+3. In App Service, set `PathBase="/api/function-pulse"`
+
+**Option B: Strip Path (Recommended)**
+
+1. Go to **Azure Front Door** > **Front Door Designer**
+2. Create or edit a routing rule:
+   - Route Pattern: `/api/function-pulse/*`
+   - Origin: Your App Service
+   - Path Override: `/*` (rewrite `/api/function-pulse/x` → `/x`)
+3. In App Service, **do not set** `PathBase`
+
+### Update Azure AD Redirect URIs
+
+Regardless of which path option you choose, the redirect URI in Azure AD must use the **public AFD URL with the full path**:
+
+1. Go to your app registration > **Authentication**
+2. **Remove** the `azurewebsites.net` redirect URI
+3. **Add** the AFD redirect URIs:
+   - Redirect URI: `https://<your-afd-domain>/<path-prefix>/signin-oidc`
+     - Example: `https://ssm-dev.hcahealthcare.cloud/api/function-pulse/signin-oidc`
+   - Logout URL: `https://<your-afd-domain>/<path-prefix>/signout-callback-oidc`
+     - Example: `https://ssm-dev.hcahealthcare.cloud/api/function-pulse/signout-callback-oidc`
+4. Click **Save**
+
+### Testing the Configuration
+
+After configuring AFD and App Settings:
+
+1. Navigate to the **public AFD URL**: `https://ssm-dev.hcahealthcare.cloud/api/function-pulse/`
+2. Click **Sign in with Microsoft**
+3. **Check the browser address bar during redirect** — it should show the AFD hostname, not `azurewebsites.net`
+4. Complete sign-in
+5. After successful authentication, verify the URL is still the AFD URL
+
+**If you see `azurewebsites.net` in the redirect URL**:
+- ForwardedHeaders may not be reading the headers correctly
+- Check App Service logs for ForwardedHeaders middleware startup messages
+- Verify AFD is forwarding `X-Forwarded-Host` and `X-Forwarded-Proto`
+
+**If you see doubled paths** (e.g., `/api/function-pulse/api/function-pulse/...`):
+- You've set PathBase when AFD preserves the path — remove PathBase, or
+- AFD is not stripping the path and you haven't set PathBase — add PathBase
+
+### Security Note: KnownProxies and ForwardedHeaders
+
+FuncPulse clears `KnownNetworks` and `KnownProxies` in `ForwardedHeadersOptions` to trust all upstream proxies. This is **required** for Azure App Service + Front Door because:
+
+1. AFD and App Service infrastructure IPs are dynamic and unpredictable
+2. Azure network security groups and App Service built-in isolation protect the App Service origin
+3. AFD WAF (if enabled) provides additional security at the edge
+
+**Tradeoff**: The app trusts `X-Forwarded-*` headers from any upstream source. This is standard practice for Azure-hosted apps and is mitigated by Azure's network isolation.
+
 ## Step 6: Assign User Permissions
 
 Users need appropriate Azure RBAC permissions to view Function Apps and Application Insights data.
