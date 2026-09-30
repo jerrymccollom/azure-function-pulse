@@ -3,6 +3,7 @@ using FuncPulse.Core.Models;
 using FuncPulse.Core.Services;
 using FuncPulse.Web.Services;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 
@@ -50,6 +51,28 @@ if (!azureSettings?.DemoMode == true && isAzureHosted)
         Console.WriteLine($"[{timestamp}] WARNING: Running in Azure but no AzureAd configuration found. User authentication will not be available.");
     }
 }
+
+// Configure ForwardedHeaders for Azure Front Door / reverse proxy scenarios
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    // Trust forwarded headers from Azure Front Door / App Service
+    // For App Service behind AFD, we must trust all proxies since AFD/AppService IPs are dynamic
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | 
+                               ForwardedHeaders.XForwardedProto | 
+                               ForwardedHeaders.XForwardedHost;
+    
+    // SECURITY: Clear KnownNetworks and KnownProxies to trust all upstream proxies.
+    // This is required for Azure App Service + Front Door because:
+    // 1. AFD and App Service infrastructure IPs are dynamic and not predictable
+    // 2. App Service networking sits between AFD and the container
+    // Tradeoff: App trusts X-Forwarded-* headers from any upstream source.
+    // Mitigation: Azure network security groups, AFD WAF, and App Service built-in isolation.
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+    
+    // Optional: Set ForwardLimit if you know the proxy chain depth (e.g., 2 for AFD + AppService)
+    // options.ForwardLimit = 2;
+});
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -128,15 +151,21 @@ var app = builder.Build();
 timestamp = DateTime.Now.ToString("HH:mm:ss");
 Console.WriteLine($"[{timestamp}] Configuring HTTP pipeline...");
 
+// IMPORTANT: UseForwardedHeaders must come first (before UsePathBase, UseAuthentication, UseHttpsRedirection)
+// This ensures the app sees the public AFD host/scheme when building redirect URIs for OIDC
+app.UseForwardedHeaders();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
 
 // Configure path base for reverse-proxy deployments (e.g., Azure Front Door)
+// NOTE: PathBase should be set AFTER UseForwardedHeaders so it sees the correct host
+// IMPORTANT: Set PathBase in app settings OR let AFD forward X-Forwarded-Prefix, NOT BOTH.
+// If AFD already strips/rewrites the path prefix, do not set PathBase here.
 var pathBase = builder.Configuration["PathBase"];
 if (!string.IsNullOrWhiteSpace(pathBase))
 {
@@ -144,6 +173,9 @@ if (!string.IsNullOrWhiteSpace(pathBase))
     Console.WriteLine($"[{timestamp}] Configuring path base: {pathBase}");
     app.UsePathBase(pathBase);
 }
+
+// UseHttpsRedirection after UseForwardedHeaders so it sees X-Forwarded-Proto
+app.UseHttpsRedirection();
 
 if (isAzureAdConfigured)
 {
