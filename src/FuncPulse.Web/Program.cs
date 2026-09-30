@@ -136,6 +136,15 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+// Configure path base for reverse-proxy deployments (e.g., Azure Front Door)
+var pathBase = builder.Configuration["PathBase"];
+if (!string.IsNullOrWhiteSpace(pathBase))
+{
+    timestamp = DateTime.Now.ToString("HH:mm:ss");
+    Console.WriteLine($"[{timestamp}] Configuring path base: {pathBase}");
+    app.UsePathBase(pathBase);
+}
+
 if (isAzureAdConfigured)
 {
     app.UseAuthentication();

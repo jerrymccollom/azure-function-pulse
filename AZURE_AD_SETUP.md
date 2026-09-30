@@ -80,12 +80,35 @@ Add the following application settings to your Azure App Service:
 | `AzureAd__Domain` | Your Azure AD domain | `contoso.onmicrosoft.com` |
 | `AzureAd__Instance` | Azure AD instance | `https://login.microsoftonline.com/` |
 | `Azure__DemoMode` | Set to false to enable Azure mode | `false` |
+| `PathBase` | (Optional) Path base for reverse-proxy deployments | `/funcpulse` or leave empty for root |
+
+4. Click **Save**
+
+### PathBase Configuration for Azure Front Door
+
+If you're deploying FuncPulse behind Azure Front Door or another reverse proxy with path-based routing, configure the `PathBase` setting to match your routing path:
+
+- **Root deployment** (e.g., `https://example.com/`): Leave `PathBase` empty or unset
+- **Subpath deployment** (e.g., `https://example.com/funcpulse/`): Set `PathBase` to `/funcpulse`
+
+**Important**: 
+- The `PathBase` value should start with `/` and must NOT include a trailing slash
+- When using a path base, you must update your Azure AD redirect URIs to include the path base:
+  - Redirect URI: `https://<your-domain>/funcpulse/signin-oidc`
+  - Logout URL: `https://<your-domain>/funcpulse/signout-callback-oidc`
+
+**Azure Front Door Example**:
+```
+Front Door Route: /funcpulse/*  →  App Service (with PathBase=/funcpulse)
+User accesses:    https://contoso.com/funcpulse/
+```
 
 4. Click **Save**
 
 ### Method B: Azure CLI
 
 ```bash
+# Basic configuration (root deployment)
 az webapp config appsettings set \
   --name <your-app-service-name> \
   --resource-group <your-resource-group> \
@@ -96,6 +119,13 @@ az webapp config appsettings set \
     AzureAd__Domain="<your-domain>.onmicrosoft.com" \
     AzureAd__Instance="https://login.microsoftonline.com/" \
     Azure__DemoMode="false"
+
+# For Azure Front Door subpath deployments, add PathBase
+az webapp config appsettings set \
+  --name <your-app-service-name> \
+  --resource-group <your-resource-group> \
+  --settings \
+    PathBase="/funcpulse"
 ```
 
 ## Step 5: Configure Redirect URIs
@@ -104,11 +134,17 @@ Make sure your App Registration has the correct redirect URIs configured:
 
 1. Go to your app registration > **Authentication**
 2. Under **Platform configurations** > **Web**, verify:
-   - Redirect URI: `https://<your-app-service-name>.azurewebsites.net/signin-oidc`
-   - Logout URL: `https://<your-app-service-name>.azurewebsites.net/signout-callback-oidc`
+   - **Root deployment** (no PathBase):
+     - Redirect URI: `https://<your-app-service-name>.azurewebsites.net/signin-oidc`
+     - Logout URL: `https://<your-app-service-name>.azurewebsites.net/signout-callback-oidc`
+   - **Subpath deployment** (with PathBase, e.g., behind Azure Front Door):
+     - Redirect URI: `https://<your-domain>/funcpulse/signin-oidc`
+     - Logout URL: `https://<your-domain>/funcpulse/signout-callback-oidc`
 3. Under **Implicit grant and hybrid flows**, ensure:
    - ✅ ID tokens (used for implicit and hybrid flows)
 4. Click **Save**
+
+**Note**: The redirect URIs must match exactly, including the path base if configured. If you change the `PathBase` setting, you must also update the redirect URIs in your Azure AD app registration.
 
 ## Step 6: Assign User Permissions
 
