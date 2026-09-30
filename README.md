@@ -56,6 +56,7 @@ FuncPulse is configured via `appsettings.json` or environment variables:
 | `Azure:OperationTimeoutSeconds` | Timeout in seconds for Azure operations (discovery, metrics, logs) | No | `300` (5 minutes) |
 | `HealthThresholds:WarningThreshold` | Failure rate % threshold for warning status (amber) | No | `1.0` |
 | `HealthThresholds:CriticalThreshold` | Failure rate % threshold for critical status (red) | No | `5.0` |
+| `PathBase` | Path base for reverse-proxy deployments (e.g., Azure Front Door). Must start with `/` and NOT include trailing slash. Leave empty for root deployment. | No | `` (empty) |
 
 ### Environment Variables
 
@@ -64,6 +65,7 @@ You can also configure FuncPulse using environment variables:
 ```bash
 export Azure__DemoMode="false"
 export Azure__OperationTimeoutSeconds="300"
+export PathBase="/funcpulse"  # For reverse-proxy subpath deployments
 ```
 
 ## Authentication
@@ -116,6 +118,24 @@ For production deployments to Azure App Service or Container Apps:
 1. Enable **System-assigned Managed Identity** on your hosting resource
 2. Grant the managed identity the required RBAC permissions (see below)
 3. Set `Azure:DemoMode` to `false` in application configuration
+
+### Deploying Behind Azure Front Door
+
+FuncPulse supports path-based routing through Azure Front Door or other reverse proxies. Configure the `PathBase` application setting to match your Front Door route:
+
+**Example: Deploying at `/funcpulse` subpath**
+
+1. Configure Azure Front Door route: `/funcpulse/*` → Backend (App Service)
+2. Add App Service application setting:
+   - **Name**: `PathBase`
+   - **Value**: `/funcpulse` (no trailing slash)
+3. If using Azure AD authentication, update redirect URIs in your app registration:
+   - Redirect URI: `https://<your-domain>/funcpulse/signin-oidc`
+   - Logout URL: `https://<your-domain>/funcpulse/signout-callback-oidc`
+
+**Root deployment** (e.g., `https://funcpulse.contoso.com/`): Leave `PathBase` empty or unset.
+
+See [AZURE_AD_SETUP.md](./AZURE_AD_SETUP.md) for complete Azure AD configuration details.
 
 ## Required Azure RBAC Permissions
 
