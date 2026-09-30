@@ -330,8 +330,8 @@
                                                     <span class="badge bg-@statusClass">@status</span>
                                                 }
                                             </td>
-                                            <td>@(metrics?.SuccessCount ?? 0)</td>
-                                            <td>@(metrics?.FailureCount ?? 0)</td>
+                                            <td>@(metrics != null ? metrics.SuccessCount.ToString() : "—")</td>
+                                            <td>@(metrics != null ? metrics.FailureCount.ToString() : "—")</td>
                                             <td>
                                                 <button class="btn btn-sm btn-outline-primary"
                                                         @onclick="() => ViewFunctionDetails(app, function)">
