@@ -168,77 +168,95 @@
                             }
                         </h5>
                     </div>
-                    <div class="btn-group" role="group">
-                        @if (canManageApps)
-                        {
-                            @if (appStates.TryGetValue(app.ResourceId, out var appState))
+                    <div class="d-flex gap-2">
+                        <button type="button" 
+                                class="btn btn-sm btn-outline-primary"
+                                @onclick="() => RefreshSingleAppAsync(app)"
+                                disabled="@(appsLoadingMetrics.Contains(app.ResourceId))"
+                                title="Refresh this function app">
+                            @if (appsLoadingMetrics.Contains(app.ResourceId))
                             {
-                                @if (appState == FunctionAppState.Running)
+                                <span class="spinner-border spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-arrow-clockwise"></i>
+                            }
+                        </button>
+                        <div class="btn-group" role="group">
+                            @if (canManageApps)
+                            {
+                                @if (appStates.TryGetValue(app.ResourceId, out var appState))
                                 {
-                                    <button type="button" 
-                                            class="btn btn-sm btn-outline-warning"
-                                            @onclick="() => RestartAppAsync(app)"
-                                            disabled="@(isManaging.Contains(app.ResourceId))">
-                                        @if (isManaging.Contains(app.ResourceId))
-                                        {
+                                    @if (appState == FunctionAppState.Running)
+                                    {
+                                        <button type="button" 
+                                                class="btn btn-sm btn-outline-warning"
+                                                @onclick="() => RestartAppAsync(app)"
+                                                disabled="@(isManaging.Contains(app.ResourceId))">
+                                            @if (isManaging.Contains(app.ResourceId))
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-arrow-clockwise me-1"></i>
+                                            }
+                                            Restart
+                                        </button>
+                                        <button type="button" 
+                                                class="btn btn-sm btn-outline-danger"
+                                                @onclick="() => StopAppAsync(app)"
+                                                disabled="@(isManaging.Contains(app.ResourceId))">
+                                            @if (isManaging.Contains(app.ResourceId))
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-stop-circle me-1"></i>
+                                            }
+                                            Stop
+                                        </button>
+                                    }
+                                    else if (appState == FunctionAppState.Stopped)
+                                    {
+                                        <button type="button" 
+                                                class="btn btn-sm btn-outline-success"
+                                                @onclick="() => StartAppAsync(app)"
+                                                disabled="@(isManaging.Contains(app.ResourceId))">
+                                            @if (isManaging.Contains(app.ResourceId))
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-play-circle me-1"></i>
+                                            }
+                                            Start
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled>
                                             <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                        }
-                                        else
-                                        {
-                                            <i class="bi bi-arrow-clockwise me-1"></i>
-                                        }
-                                        Restart
-                                    </button>
-                                    <button type="button" 
-                                            class="btn btn-sm btn-outline-danger"
-                                            @onclick="() => StopAppAsync(app)"
-                                            disabled="@(isManaging.Contains(app.ResourceId))">
-                                        @if (isManaging.Contains(app.ResourceId))
-                                        {
-                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                        }
-                                        else
-                                        {
-                                            <i class="bi bi-stop-circle me-1"></i>
-                                        }
-                                        Stop
-                                    </button>
-                                }
-                                else if (appState == FunctionAppState.Stopped)
-                                {
-                                    <button type="button" 
-                                            class="btn btn-sm btn-outline-success"
-                                            @onclick="() => StartAppAsync(app)"
-                                            disabled="@(isManaging.Contains(app.ResourceId))">
-                                        @if (isManaging.Contains(app.ResourceId))
-                                        {
-                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                        }
-                                        else
-                                        {
-                                            <i class="bi bi-play-circle me-1"></i>
-                                        }
-                                        Start
-                                    </button>
-                                }
-                                else
-                                {
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled>
-                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                        @appState
-                                    </button>
+                                            @appState
+                                        </button>
+                                    }
                                 }
                             }
-                        }
-                        else if (!AzureSettings.Value.DemoMode)
-                        {
-                            <button type="button" 
-                                    class="btn btn-sm btn-outline-secondary" 
-                                    disabled
-                                    title="Insufficient permissions to manage function apps">
-                                <i class="bi bi-lock"></i> Management Disabled
-                            </button>
-                        }
+                            else if (!AzureSettings.Value.DemoMode)
+                            {
+                                <button type="button" 
+                                        class="btn btn-sm btn-outline-secondary" 
+                                        disabled
+                                        title="Insufficient permissions to manage function apps">
+                                    <i class="bi bi-lock"></i> Management Disabled
+                                </button>
+                            }
+                        </div>
                     </div>
                 </div>
                 <div class="card-body">
@@ -630,6 +648,48 @@
     private Task RefreshDataAsync()
     {
         return LoadDataAsync();
+    }
+
+    private async Task RefreshSingleAppAsync(FunctionAppInfo app)
+    {
+        if (appsLoadingMetrics.Contains(app.ResourceId))
+        {
+            return;
+        }
+
+        appsLoadingMetrics.Add(app.ResourceId);
+        await InvokeAsync(StateHasChanged);
+
+        var timeoutSeconds = AzureSettings.Value.OperationTimeoutSeconds;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+
+        try
+        {
+            await LoadAppMetricsAsync(app, selectedTimeRange, cts.Token);
+
+            if (canManageApps)
+            {
+                try
+                {
+                    var state = await ManagementService.GetStateAsync(app.ResourceId);
+                    appStates[app.ResourceId] = state;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to get state for app {AppName}", app.Name);
+                }
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.LogWarning("Refresh operation timed out for app {AppName}", app.Name);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to refresh app {AppName}", app.Name);
+        }
     }
 
     private static string GetShortFunctionName(string fullName)
