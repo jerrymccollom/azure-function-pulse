@@ -12,9 +12,8 @@ public interface IAzureCredentialService
 {
     /// <summary>
     /// Creates the appropriate Azure credential based on the runtime environment and user authentication state.
-    /// - Local development: Uses AzureCliCredential
     /// - Azure hosted with authenticated user: Uses user's delegated token
-    /// - Azure hosted without auth: Uses DefaultAzureCredential (Managed Identity)
+    /// - Otherwise: Uses DefaultAzureCredential (Managed Identity in Azure, falls through to Azure CLI locally)
     /// </summary>
     Task<TokenCredential> CreateCredentialAsync();
 
@@ -67,7 +66,7 @@ public class AzureCredentialService : IAzureCredentialService
             return await _userCredentialProvider.GetCredentialAsync();
         }
 
-        // Otherwise use the default factory logic (CLI for local, DefaultAzureCredential for Azure)
+        // Otherwise use the default factory logic (DefaultAzureCredential for all scenarios)
         _logger.LogDebug("Using default credential factory");
         return FuncPulse.Core.Services.AzureCredentialFactory.CreateCredential();
     }
@@ -87,7 +86,7 @@ public class AzureCredentialService : IAzureCredentialService
 /// <summary>
 /// Fallback implementation of <see cref="IAzureCredentialService"/> used when Azure AD sign-in
 /// is not configured (e.g. running locally or in demo mode). There is no authenticated user in
-/// this scenario, so credentials always come from the default factory (Azure CLI/Managed Identity).
+/// this scenario, so credentials always come from the default factory (DefaultAzureCredential).
 /// </summary>
 public class DefaultAzureCredentialService : IAzureCredentialService
 {
