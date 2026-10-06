@@ -235,7 +235,7 @@ After configuring AFD and App Settings:
 
 ### Security Note: KnownProxies and ForwardedHeaders
 
-FuncPulse clears `KnownNetworks` and `KnownProxies` in `ForwardedHeadersOptions` to trust all upstream proxies. This is **required** for Azure App Service + Front Door because:
+FuncPulse clears `KnownIPNetworks` and `KnownProxies` in `ForwardedHeadersOptions` to trust all upstream proxies. This is **required** for Azure App Service + Front Door because:
 
 1. AFD and App Service infrastructure IPs are dynamic and unpredictable
 2. Azure network security groups and App Service built-in isolation protect the App Service origin

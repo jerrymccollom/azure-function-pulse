@@ -385,7 +385,7 @@ This is a purpose-built dashboard for monitoring Azure Functions. Contributions 
 
 ## License
 
-This project is provided as-is for internal use.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Support
 
