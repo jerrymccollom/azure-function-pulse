@@ -29,21 +29,16 @@ public static class AzureCredentialFactory
     
     /// <summary>
     /// Creates the appropriate Azure credential based on the runtime environment.
-    /// - Local development: Uses AzureCliCredential (skips slow managed identity probe)
-    /// - Azure hosted: Uses DefaultAzureCredential (includes managed identity)
+    /// Uses DefaultAzureCredential in all scenarios - the IMDS probe timeout issue 
+    /// (Azure SDK issue #61922) was fixed in Azure.Core 1.63.0, so local development 
+    /// no longer needs to skip the managed identity probe.
     /// </summary>
     public static TokenCredential CreateCredential()
     {
-        if (IsRunningInAzure())
-        {
-            // In Azure: use full DefaultAzureCredential chain (includes Managed Identity)
-            return new DefaultAzureCredential();
-        }
-        else
-        {
-            // Local development: use AzureCliCredential only (skips 30+ second IMDS timeout)
-            return new AzureCliCredential();
-        }
+        // Use DefaultAzureCredential in all scenarios (local and Azure hosted)
+        // Azure.Core 1.63.0+ treats IMDS probe timeouts as credential-unavailable
+        // instead of aborting the chain, so it gracefully falls through to AzureCliCredential locally
+        return new DefaultAzureCredential();
     }
 
     /// <summary>
@@ -118,7 +113,7 @@ public static class AzureCredentialFactory
         }
         else
         {
-            return "AzureCliCredential (local development - skips managed identity probe)";
+            return "DefaultAzureCredential (local development - falls through to Azure CLI)";
         }
     }
 }

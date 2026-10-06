@@ -70,35 +70,32 @@ export PathBase="/funcpulse"  # For reverse-proxy subpath deployments
 
 ## Authentication
 
-FuncPulse uses **optimized Azure credential selection** based on the runtime environment:
+FuncPulse uses **DefaultAzureCredential** for Azure authentication in all scenarios:
 
 ### Local Development
-- Uses **AzureCliCredential** 
-- Skips the slow managed identity probe (which can timeout after 30+ seconds)
+- Uses **DefaultAzureCredential**
+- Gracefully falls through from Managed Identity to Azure CLI
 - Requires: `az login` before running
+- Azure SDK fix (Azure.Core 1.63.0+) ensures IMDS probe timeouts no longer abort the credential chain ([#61922](https://github.com/Azure/azure-sdk-for-net/issues/61922))
 
 ### Azure Hosted (App Service, Container Apps, Functions)
 - Uses **DefaultAzureCredential** (full chain)
 - Includes Managed Identity authentication
 - Automatically detected via environment variables (`WEBSITE_INSTANCE_ID`, `IDENTITY_ENDPOINT`, `MSI_ENDPOINT`)
 
-This optimization significantly improves startup time for local development by avoiding the 30+ second managed identity timeout.
-
 ### Authentication Methods
 
 ### Authentication Methods
 
-The credential selection is automatic:
+FuncPulse uses **DefaultAzureCredential** which attempts authentication in this order:
 
-**Local Development (AzureCliCredential):**
-1. Azure CLI (`az login`)
-
-**Azure Hosted (DefaultAzureCredential):**
 1. Environment variables (for service principals)
 2. Managed Identity (Azure App Service, Container Apps, Functions, VMs)
-3. Azure CLI (fallback)
+3. Azure CLI (`az login`)
 4. Azure PowerShell (fallback)
 5. Visual Studio (fallback)
+
+In local development, the credential chain gracefully skips Managed Identity (unavailable) and falls through to Azure CLI.
 
 ### Local Development
 
@@ -296,7 +293,7 @@ When running with `DemoMode: false`, FuncPulse automatically outputs verbose con
 [15:30:00] Configuration loaded:
   - DemoMode: False
 [15:30:00] Azure production mode enabled - verbose logging active
-[15:30:00] Will use DefaultAzureCredential (tries: Environment → Managed Identity → Azure CLI → PowerShell → Visual Studio)
+[15:30:00] Using DefaultAzureCredential (tries: Environment → Managed Identity → Azure CLI → PowerShell → Visual Studio)
 [15:30:00] Building application...
 [15:30:01] FunctionDiscoveryService: Initializing DefaultAzureCredential...
 [15:30:01] FunctionDiscoveryService: DefaultAzureCredential created successfully

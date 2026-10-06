@@ -55,7 +55,7 @@ public class AzureCredentialFactoryTests
     }
     
     [Fact]
-    public void CreateCredential_LocalEnvironment_ReturnsAzureCliCredential()
+    public void CreateCredential_LocalEnvironment_ReturnsDefaultAzureCredential()
     {
         // Ensure we're in "local" mode
         var originalWebsiteInstanceId = Environment.GetEnvironmentVariable("WEBSITE_INSTANCE_ID");
@@ -70,7 +70,7 @@ public class AzureCredentialFactoryTests
             
             var credential = AzureCredentialFactory.CreateCredential();
             
-            Assert.IsType<AzureCliCredential>(credential);
+            Assert.IsType<DefaultAzureCredential>(credential);
         }
         finally
         {
@@ -100,7 +100,7 @@ public class AzureCredentialFactoryTests
     }
     
     [Fact]
-    public void GetCredentialDescription_LocalEnvironment_ReturnsAzureCliDescription()
+    public void GetCredentialDescription_LocalEnvironment_ReturnsDefaultCredentialDescription()
     {
         var originalWebsiteInstanceId = Environment.GetEnvironmentVariable("WEBSITE_INSTANCE_ID");
         var originalIdentityEndpoint = Environment.GetEnvironmentVariable("IDENTITY_ENDPOINT");
@@ -114,7 +114,7 @@ public class AzureCredentialFactoryTests
             
             var description = AzureCredentialFactory.GetCredentialDescription();
             
-            Assert.Contains("AzureCliCredential", description);
+            Assert.Contains("DefaultAzureCredential", description);
             Assert.Contains("local development", description);
         }
         finally
