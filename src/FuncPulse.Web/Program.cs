@@ -61,13 +61,13 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
                                ForwardedHeaders.XForwardedProto | 
                                ForwardedHeaders.XForwardedHost;
     
-    // SECURITY: Clear KnownNetworks and KnownProxies to trust all upstream proxies.
+    // SECURITY: Clear KnownIPNetworks and KnownProxies to trust all upstream proxies.
     // This is required for Azure App Service + Front Door because:
     // 1. AFD and App Service infrastructure IPs are dynamic and not predictable
     // 2. App Service networking sits between AFD and the container
     // Tradeoff: App trusts X-Forwarded-* headers from any upstream source.
     // Mitigation: Azure network security groups, AFD WAF, and App Service built-in isolation.
-    options.KnownNetworks.Clear();
+    options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
     
     // Optional: Set ForwardLimit if you know the proxy chain depth (e.g., 2 for AFD + AppService)
