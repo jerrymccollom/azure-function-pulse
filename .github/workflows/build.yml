@@ -37,3 +37,6 @@ jobs:
       
       - name: Build Tests project
         run: dotnet build tests/FuncPulse.Tests/FuncPulse.Tests.csproj --configuration Release --no-restore
+      
+      - name: Run tests
+        run: dotnet test tests/FuncPulse.Tests/FuncPulse.Tests.csproj --configuration Release --no-build --verbosity normal
