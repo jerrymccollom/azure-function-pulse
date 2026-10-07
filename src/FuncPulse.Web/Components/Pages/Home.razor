@@ -451,43 +451,21 @@
             if (availableSubscriptions.Count == 1)
             {
                 subscriptionId = availableSubscriptions[0].SubscriptionId;
+                await LoadResourceGroupsAndRestoreStateAsync();
             }
-            // Try to restore from state
-            else if (DashboardState.TryRestore(string.Empty, out var snapshot) && 
-                     !string.IsNullOrEmpty(snapshot.SubscriptionId) &&
-                     availableSubscriptions.Any(s => s.SubscriptionId == snapshot.SubscriptionId))
+            else
             {
-                subscriptionId = snapshot.SubscriptionId;
-            }
-
-            // If a subscription is selected, load resource groups and potentially restore state
-            if (!string.IsNullOrEmpty(subscriptionId))
-            {
-                if (DashboardState.TryRestore(subscriptionId, out var snapshot))
+                // Try to restore subscription from state (check all available subscriptions)
+                foreach (var sub in availableSubscriptions)
                 {
-                    resourceGroup = snapshot.ResourceGroup;
-                    selectedTimeRange = snapshot.SelectedTimeRange;
-                    availableResourceGroups = snapshot.AvailableResourceGroups.ToList();
-                    functionApps = snapshot.FunctionApps.ToList();
-                    restoredFromState = true;
-                    showRefreshPrompt = snapshot.ShouldPromptForRefresh;
-
-                    await LoadResourceGroupsAsync(showLoadingState: false);
-                    await CheckManagementPermissionsAsync();
-                    if (canManageApps)
+                    if (DashboardState.TryRestore(sub.SubscriptionId, out var _))
                     {
-                        await LoadAppStatesAsync();
+                        subscriptionId = sub.SubscriptionId;
+                        await LoadResourceGroupsAndRestoreStateAsync();
+                        break;
                     }
                 }
-                else
-                {
-                    await LoadResourceGroupsAsync(showLoadingState: false);
-                }
-
-                if (!restoredFromState && !string.IsNullOrEmpty(resourceGroup))
-                {
-                    await LoadDataAsync();
-                }
+                // If no state was restored, wait for user to select a subscription
             }
         }
         catch (OperationCanceledException)
@@ -502,6 +480,35 @@
         {
             isDiscovering = false;
             await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadResourceGroupsAndRestoreStateAsync()
+    {
+        if (DashboardState.TryRestore(subscriptionId, out var snapshot))
+        {
+            resourceGroup = snapshot.ResourceGroup;
+            selectedTimeRange = snapshot.SelectedTimeRange;
+            availableResourceGroups = snapshot.AvailableResourceGroups.ToList();
+            functionApps = snapshot.FunctionApps.ToList();
+            restoredFromState = true;
+            showRefreshPrompt = snapshot.ShouldPromptForRefresh;
+
+            await LoadResourceGroupsAsync(showLoadingState: false);
+            await CheckManagementPermissionsAsync();
+            if (canManageApps)
+            {
+                await LoadAppStatesAsync();
+            }
+        }
+        else
+        {
+            await LoadResourceGroupsAsync(showLoadingState: false);
+        }
+
+        if (!restoredFromState && !string.IsNullOrEmpty(resourceGroup))
+        {
+            await LoadDataAsync();
         }
     }
 
