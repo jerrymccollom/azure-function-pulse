@@ -52,7 +52,24 @@
             <strong>Subscription:</strong>
         </div>
         <div class="col-auto">
-            <span class="text-muted">@(string.IsNullOrEmpty(subscriptionId) ? "Not configured" : subscriptionId)</span>
+            @if (!AzureSettings.Value.DemoMode && availableSubscriptions.Count > 0)
+            {
+                <select class="form-select form-select-sm" style="max-width: 400px;" @onchange="OnSubscriptionChanged" value="@subscriptionId">
+                    <option value="">-- Select Subscription --</option>
+                    @foreach (var sub in availableSubscriptions)
+                    {
+                        <option value="@sub.SubscriptionId" selected="@(sub.SubscriptionId == subscriptionId)">@sub.DisplayName</option>
+                    }
+                </select>
+                @if (string.IsNullOrEmpty(subscriptionId))
+                {
+                    <small class="text-muted d-block mt-1">Choose a subscription to load resource groups.</small>
+                }
+            }
+            else
+            {
+                <span class="text-muted">@(string.IsNullOrEmpty(subscriptionId) ? "Not configured" : subscriptionId)</span>
+            }
         </div>
         <div class="col-auto">
             <strong>Resource Group:</strong>
@@ -72,10 +89,15 @@
                     <small class="text-muted d-block mt-1">Choose a resource group to load its functions.</small>
                 }
             }
+            else if (!AzureSettings.Value.DemoMode && string.IsNullOrEmpty(subscriptionId))
+            {
+                <span class="text-muted">Select a subscription first</span>
+            }
             else
             {
                 <span class="text-muted">@(string.IsNullOrEmpty(resourceGroup) ? "Not configured" : resourceGroup)</span>
             }
+        </div>
         </div>
         <div class="col-auto ms-auto">
             <button type="button" 
@@ -104,7 +126,13 @@
         </div>
     }
     
-    @if (!AzureSettings.Value.DemoMode && string.IsNullOrEmpty(resourceGroup))
+    @if (!AzureSettings.Value.DemoMode && string.IsNullOrEmpty(subscriptionId))
+    {
+        <div class="alert alert-info">
+            Select a subscription from the dropdown above to begin.
+        </div>
+    }
+    else if (!AzureSettings.Value.DemoMode && string.IsNullOrEmpty(resourceGroup))
     {
         <div class="alert alert-info">
             Select a resource group from the dropdown above to load functions.
@@ -366,6 +394,7 @@
     private string? managementErrorMessage;
     private HashSet<string> appsLoadingMetrics = new();
     
+    private List<SubscriptionInfo> availableSubscriptions = new();
     private List<string> availableResourceGroups = new();
     
     private int totalFunctions => functionApps.Sum(a => a.Functions.Count);
@@ -409,46 +438,65 @@
         {
             var timeoutSeconds = AzureSettings.Value.OperationTimeoutSeconds;
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
-            subscriptionId = await DiscoveryService.GetSubscriptionIdAsync(cts.Token);
-
-            if (string.IsNullOrEmpty(subscriptionId))
+            
+            // First, load available subscriptions
+            availableSubscriptions = await DiscoveryService.ListSubscriptionsAsync(cts.Token);
+            
+            if (availableSubscriptions.Count == 0)
             {
-                throw new InvalidOperationException("No Azure subscription is available for the current credentials.");
+                throw new InvalidOperationException("No Azure subscriptions are available for the current credentials.");
+            }
+            
+            // Auto-select first subscription if only one is available
+            if (availableSubscriptions.Count == 1)
+            {
+                subscriptionId = availableSubscriptions[0].SubscriptionId;
+            }
+            // Try to restore from state
+            else if (DashboardState.TryRestore(string.Empty, out var snapshot) && 
+                     !string.IsNullOrEmpty(snapshot.SubscriptionId) &&
+                     availableSubscriptions.Any(s => s.SubscriptionId == snapshot.SubscriptionId))
+            {
+                subscriptionId = snapshot.SubscriptionId;
             }
 
-            if (DashboardState.TryRestore(subscriptionId, out var snapshot))
+            // If a subscription is selected, load resource groups and potentially restore state
+            if (!string.IsNullOrEmpty(subscriptionId))
             {
-                resourceGroup = snapshot.ResourceGroup;
-                selectedTimeRange = snapshot.SelectedTimeRange;
-                availableResourceGroups = snapshot.AvailableResourceGroups.ToList();
-                functionApps = snapshot.FunctionApps.ToList();
-                restoredFromState = true;
-                showRefreshPrompt = snapshot.ShouldPromptForRefresh;
-
-                await LoadResourceGroupsAsync(showLoadingState: false);
-                await CheckManagementPermissionsAsync();
-                if (canManageApps)
+                if (DashboardState.TryRestore(subscriptionId, out var snapshot))
                 {
-                    await LoadAppStatesAsync();
-                }
-            }
-            else
-            {
-                await LoadResourceGroupsAsync(showLoadingState: false);
-            }
+                    resourceGroup = snapshot.ResourceGroup;
+                    selectedTimeRange = snapshot.SelectedTimeRange;
+                    availableResourceGroups = snapshot.AvailableResourceGroups.ToList();
+                    functionApps = snapshot.FunctionApps.ToList();
+                    restoredFromState = true;
+                    showRefreshPrompt = snapshot.ShouldPromptForRefresh;
 
-            if (!restoredFromState && !string.IsNullOrEmpty(resourceGroup))
-            {
-                await LoadDataAsync();
+                    await LoadResourceGroupsAsync(showLoadingState: false);
+                    await CheckManagementPermissionsAsync();
+                    if (canManageApps)
+                    {
+                        await LoadAppStatesAsync();
+                    }
+                }
+                else
+                {
+                    await LoadResourceGroupsAsync(showLoadingState: false);
+                }
+
+                if (!restoredFromState && !string.IsNullOrEmpty(resourceGroup))
+                {
+                    await LoadDataAsync();
+                }
             }
         }
         catch (OperationCanceledException)
         {
-            errorMessage = $"Timed out after {AzureSettings.Value.OperationTimeoutSeconds} seconds while determining the Azure subscription. Run 'az login' and select a subscription with 'az account set'.";
+            errorMessage = $"Timed out after {AzureSettings.Value.OperationTimeoutSeconds} seconds while loading Azure subscriptions. Run 'az login' to authenticate.";
         }
         catch (Exception ex)
         {
-            errorMessage = $"Unable to determine the Azure subscription. Run 'az login' and select a subscription with 'az account set'. Details: {ex.Message}";
+            errorMessage = $"Unable to load Azure subscriptions. Run 'az login' to authenticate. Details: {ex.Message}";
         }
         finally
         {
@@ -624,6 +672,22 @@
                 await InvokeAsync(StateHasChanged);
             }
         }
+    }
+
+    private async Task OnSubscriptionChanged(ChangeEventArgs e)
+    {
+        var newSubscriptionId = e.Value?.ToString();
+        if (string.IsNullOrEmpty(newSubscriptionId) || newSubscriptionId == subscriptionId)
+            return;
+
+        subscriptionId = newSubscriptionId;
+        resourceGroup = string.Empty; // Reset resource group when subscription changes
+        availableResourceGroups.Clear();
+        functionApps.Clear();
+        showRefreshPrompt = false;
+        DashboardState.ClearRefreshPrompt();
+        
+        await LoadResourceGroupsAsync(showLoadingState: true);
     }
 
     private async Task OnResourceGroupChanged(ChangeEventArgs e)

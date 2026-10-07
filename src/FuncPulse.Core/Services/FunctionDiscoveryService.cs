@@ -248,6 +248,49 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
         return subscription.Data.SubscriptionId;
     }
 
+    public async Task<List<SubscriptionInfo>> ListSubscriptionsAsync(CancellationToken cancellationToken = default)
+    {
+        if (_settings.DemoMode)
+        {
+            return new List<SubscriptionInfo> 
+            { 
+                new() { SubscriptionId = "demo-sub-1", DisplayName = "Demo Subscription 1", State = "Enabled" },
+                new() { SubscriptionId = "demo-sub-2", DisplayName = "Demo Subscription 2", State = "Enabled" }
+            };
+        }
+
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Listing subscriptions...");
+
+        try
+        {
+            var subscriptions = new List<SubscriptionInfo>();
+            
+            await foreach (var subscription in _armClient.GetSubscriptions().GetAllAsync(cancellationToken: cancellationToken))
+            {
+                subscriptions.Add(new SubscriptionInfo
+                {
+                    SubscriptionId = subscription.Data.SubscriptionId,
+                    DisplayName = subscription.Data.DisplayName,
+                    State = subscription.Data.State?.ToString()
+                });
+            }
+            
+            timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: Found {subscriptions.Count} subscription(s)");
+            
+            return subscriptions.OrderBy(s => s.DisplayName).ToList();
+        }
+        catch (Exception ex)
+        {
+            timestamp = DateTime.Now.ToString("HH:mm:ss");
+            Console.WriteLine($"[{timestamp}] FunctionDiscoveryService: ERROR listing subscriptions - {ex.GetType().Name}: {ex.Message}");
+            _logger.LogError(ex, "Failed to list subscriptions");
+            throw;
+        }
+    }
+
+
     public async Task<List<string>> ListResourceGroupsAsync(string subscriptionId, CancellationToken cancellationToken = default)
     {
         if (_settings.DemoMode)
