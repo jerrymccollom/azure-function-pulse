@@ -1,5 +1,12 @@
 namespace FuncPulse.Core.Models;
 
+public class SubscriptionInfo
+{
+    public required string SubscriptionId { get; set; }
+    public required string DisplayName { get; set; }
+    public string? State { get; set; }
+}
+
 public class FunctionAppInfo
 {
     public required string ResourceId { get; set; }

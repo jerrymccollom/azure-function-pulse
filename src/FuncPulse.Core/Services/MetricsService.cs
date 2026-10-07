@@ -350,7 +350,9 @@ public class MetricsService : IMetricsService
 
     private FunctionMetrics GenerateDemoMetrics(string functionName, TimeRange timeRange)
     {
-        var random = new Random(functionName.GetHashCode());
+        // Use a combination of hash code and string length to ensure distinct seeds
+        var seed = functionName.GetHashCode() ^ (functionName.Length * 397);
+        var random = new Random(seed);
         var metrics = new FunctionMetrics();
         var endTime = DateTime.UtcNow;
         var startTime = endTime - timeRange.ToTimeSpan();
@@ -398,7 +400,9 @@ public class MetricsService : IMetricsService
 
     private List<FunctionInvocation> GenerateDemoInvocations(string functionName, TimeRange timeRange)
     {
-        var random = new Random(functionName.GetHashCode());
+        // Use a combination of hash code and string length to ensure distinct seeds
+        var seed = functionName.GetHashCode() ^ (functionName.Length * 397);
+        var random = new Random(seed);
         var invocations = new List<FunctionInvocation>();
         var now = DateTime.UtcNow;
         
